@@ -1,0 +1,55 @@
+id: S15
+title: Marginal lane causes recovery storms at Gen4
+description: >
+  Lane 5 of link B corrupts ordered sets and data now and then, but only at
+  16 GT/s (seeded random errors, 0.1 percent per ordered set). Training
+  succeeds, equalization passes, and the link reaches Gen4. From then on
+  receiver errors on lane 5 keep sending the link through Recovery.
+topology: basic
+seed: 7
+duration_ms: 50
+faults:
+  - {type: lane_errors, link: B, lanes: [5], corrupt_rate: 0.001, rates: [Gen4]}
+expected:
+  summary: >
+    Link B stays at Gen4 x16 but goes through Recovery many times
+    (flap_count >= 10), every error reported on lane 5; the link never goes
+    down.
+  checks:
+    - {check: link, link: B, state: [L0, Recovery], speed: Gen4, width: x16}
+    - {check: counter, link: B, counter: flap_count, op: ">=", value: 10}
+    - {check: counter, link: B, counter: link_down_count, op: "==", value: 0}
+    - {check: counter, link: B, counter: eq_failures.Gen4, op: "==", value: 0}
+    - {check: reason, ports: [DSP1, EP1], contains: "on lane 5"}
+    - {check: counter, link: C, counter: flap_count, op: "==", value: 0}
+    - {check: devices, count: 7}
+symptom: >
+  A device works at full speed and width, but the error log is flooded with
+  corrected errors, and throughput is uneven.
+what_to_look_for: >
+  Below 16 GT/s link B is quiet. Once it reaches Gen4 (about 26 ms) the
+  swimlanes fill with closely spaced Recovery bars. Every recovery that
+  starts on a port gives the reason "receiver error in L0 on lane 5". The
+  spacing between them is irregular (random errors), unlike the clockwork
+  3 ms spacing of S07. Run it again with --seed 8: the count changes, the
+  pattern does not.
+what_this_means: >
+  When errors cluster on one lane and one rate, the problem is local: one
+  lane of one channel lacks margin at that rate. Equalization can pass and
+  the link can still be marginal, because equalization only has to meet a
+  target once at training time. The fix is usually physical (connector,
+  trace, cable), or reducing the speed as a workaround.
+likely_root_causes:
+  - "One lane with less margin: damaged or contaminated connector pin, via or trace defect, crosstalk hot spot."
+  - "Equalization settled on a marginal preset for that lane."
+  - "A retimer lane with a problem."
+how_to_debug:
+  - "Check the Lane Error Status register (LaneErrStat in lspci -vvv, Secondary PCI Express capability) to identify the lane."
+  - "Run Lane Margining at the Receiver (16 GT/s feature; recent pciutils include a pcilmr tool) and compare lane 5 with the others."
+  - "Watch AER correctable errors (Receiver Error) and how fast they increase."
+  - "Force Target Link Speed to 8 GT/s and retrain: if the errors stop, the lane lacks margin at 16 GT/s."
+  - "Swap slot/cable/riser and see whether the bad lane follows the card or stays with the slot."
+mystery_hints:
+  - "Do the errors point at one lane or at all lanes?"
+  - "Did the errors exist at 8 GT/s?"
+mystery_cause: "One lane of the link produces bit errors at 16 GT/s only (marginal lane)."

@@ -1,0 +1,53 @@
+id: S09
+title: Upstream link down (link A never trains)
+description: >
+  Every lane of link A (root port to switch) is open. Neither end detects a
+  receiver, so link A cycles in Detect forever. Because the switch holds
+  its downstream ports until link A reaches L0 (dsp_start =
+  wait_for_upstream), links B, C and D never start, and the endpoints only
+  see receivers that are held in reset.
+topology: basic
+seed: 1
+duration_ms: 50
+faults:
+  - {type: dead_lanes, link: A, lanes: all}
+expected:
+  summary: >
+    Link A stays in Detect; the switch downstream ports never leave
+    Detect.Quiet; enumeration finds only the root port.
+  checks:
+    - {check: link, link: A, state: Detect}
+    - {check: only, ports: [DSP1, DSP2, DSP3], states: [Detect.Quiet]}
+    - {check: never, ports: [EP1, EP2], state: Polling}
+    - {check: counter, link: A, counter: detect_cycles, op: ">=", value: 6}
+    - {check: devices, count: 1, absent: [USP, EP1, EP2]}
+symptom: >
+  None of the devices behind the switch appear, and neither does the switch
+  itself.
+what_to_look_for: >
+  RP and USP both show grey Detect cycles every 12 ms. The three switch
+  downstream ports show a single Detect.Quiet bar for the whole run, with a
+  status event "held in Detect.Quiet: switch upstream link A not in L0
+  yet". EP1 and EP2 also cycle in Detect because a port held in reset keeps
+  its receiver high-impedance. The enumeration tree has only 00:01.0.
+what_this_means: >
+  When everything behind a point in the hierarchy is missing, look at the
+  first link above the missing devices. A switch cannot be enumerated if
+  its upstream link is down, and a switch that waits for its upstream link
+  will not train its downstream links either. Fixing link A fixes
+  everything.
+likely_root_causes:
+  - "Switch card or cable not seated; open connector or cable."
+  - "Switch held in reset (PERST# asserted) or not powered."
+  - "Missing reference clock to the switch."
+  - "Switch firmware/EEPROM not loaded, so the switch never enables its upstream port."
+how_to_debug:
+  - "lspci -t: the root port shows an empty bus range; nothing is behind it."
+  - "lspci -vvv on the root port: LnkSta Width x0, DLActive-."
+  - "Check the switch's power rails, PERST#, REFCLK and any 'switch ready' indicator."
+  - "If the switch has a management interface (I2C/SMBus/UART), read its upstream port LTSSM state and firmware status."
+  - "Retry with dsp_start: together (scenario config) to see how the timeline changes, and compare."
+mystery_hints:
+  - "Which is the highest point in the tree that is missing?"
+  - "Do the switch downstream ports even try to train?"
+mystery_cause: "The root-port-to-switch link has no connection at all, so the switch and everything behind it are missing."

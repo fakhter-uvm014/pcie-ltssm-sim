@@ -1,0 +1,54 @@
+id: S16
+title: Target Link Speed capped at Gen3 by software
+description: >
+  Both ends of link B support 16 GT/s, but software (for example a BIOS
+  "PCIe speed" option) has set Target Link Speed in DSP1's Link Control 2
+  register to 8 GT/s. The downstream port never advertises more than
+  8 GT/s, so the link stops at Gen3 with no errors and no failed
+  equalization.
+topology: basic
+seed: 1
+duration_ms: 50
+faults:
+  - {type: target_link_speed, port: DSP1, speed: Gen3}
+expected:
+  summary: >
+    Link B trains to Gen3 x16 with 8 GT/s equalization complete and never
+    attempts 16 GT/s; links A and C reach Gen4.
+  checks:
+    - {check: link, link: B, state: L0, speed: Gen3, width: x16}
+    - {check: port, port: DSP1, target_link_speed: Gen3, eq_8gt_complete: true, eq_16gt_complete: false}
+    - {check: counter, link: B, counter: eq_attempts.Gen4, op: "==", value: 0}
+    - {check: counter, link: B, counter: eq_failures.Gen3, op: "==", value: 0}
+    - {check: reason, port: DSP1, contains: "Target Link Speed (LnkCtl2) is Gen3"}
+    - {check: never, ports: [DSP1, EP1], state: "L0@Gen4"}
+    - {check: link, link: C, state: L0, speed: Gen4, width: x4}
+    - {check: devices, count: 7}
+symptom: >
+  A device runs at 8 GT/s although both ends support 16 GT/s. There are no
+  errors and nothing failed.
+what_to_look_for: >
+  Link B makes one speed change (Gen1 -> Gen3) with a successful
+  equalization and then stays in L0. Unlike S04/S05 there is no failed
+  phase, no rate-ceiling message and no Link Equalization Request. The
+  reason of the speed change names the limit: "link target is Gen3 because
+  Target Link Speed (LnkCtl2) is Gen3". In the lspci view, LnkCtl2 shows
+  Target Link Speed: 8GT/s.
+what_this_means: >
+  "Slower than both ends support" has two very different families of
+  causes: something failed (equalization, signal integrity) or someone
+  asked for it (Target Link Speed, BIOS options, power policy). Check the
+  configuration before chasing signal integrity: it takes a minute and
+  saves days.
+likely_root_causes:
+  - "BIOS/UEFI option limiting the slot's PCIe generation."
+  - "Software or a driver writing Target Link Speed (sometimes as a workaround for an earlier problem)."
+  - "Platform firmware policy for a particular slot or riser."
+how_to_debug:
+  - "lspci -vvv on the downstream port: LnkCtl2 'Target Link Speed' shows the cap."
+  - "Check BIOS settings for the slot's link speed."
+  - "To raise it on a test system: write Target Link Speed in LnkCtl2 with setpci, then set Retrain Link in LnkCtl, and re-read LnkSta (see docs/guide/real-hardware.md for the cautions)."
+mystery_hints:
+  - "Did anything fail, or did the link simply stop climbing?"
+  - "What limit is named in the speed-change reason?"
+mystery_cause: "Software limited the downstream port's Target Link Speed to 8.0 GT/s."

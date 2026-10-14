@@ -1,0 +1,59 @@
+id: S10
+title: Hot Reset from the host
+description: >
+  At 35 ms, with every link at Gen4, software sets the Secondary Bus Reset
+  bit on the root port. The root port signals Hot Reset with TS1s, the
+  switch upstream port follows, and the switch propagates the reset to its
+  downstream ports. Every link goes down, retrains from Detect at 2.5 GT/s,
+  equalizes again and ends exactly as in S01.
+topology: basic
+seed: 1
+duration_ms: 75
+commands:
+  - {at_ms: 35, port: RP, command: hot_reset}
+expected:
+  summary: >
+    All switch links retrain after the Hot Reset; the final state matches
+    S01 (A and B at Gen4 x16, C at Gen4 x4, 7 functions).
+  checks:
+    - {check: link, link: A, state: L0, speed: Gen4, width: x16}
+    - {check: link, link: B, state: L0, speed: Gen4, width: x16}
+    - {check: link, link: C, state: L0, speed: Gen4, width: x4}
+    - {check: sequence, port: RP, states: ["L0@Gen4", Recovery.RcvrLock, Recovery.RcvrCfg, Hot Reset, Detect.Quiet, "L0@Gen1", "L0@Gen3", "L0@Gen4"]}
+    - {check: sequence, port: USP, states: ["L0@Gen4", Hot Reset, Detect.Quiet, "L0@Gen4"]}
+    - {check: sequence, port: DSP1, states: ["L0@Gen4", Hot Reset, Detect.Quiet, "L0@Gen4"]}
+    - {check: sequence, port: EP2, states: ["L0@Gen4", Hot Reset, Detect.Quiet, "L0@Gen4"]}
+    - {check: counter, link: A, counter: link_down_count, op: "==", value: 1}
+    - {check: counter, link: B, counter: link_down_count, op: "==", value: 1}
+    - {check: counter, link: A, counter: eq_attempts.Gen4, op: "==", value: 2}
+    - {check: devices, count: 7}
+symptom: >
+  Every device behind the root port disappeared for a while and then came
+  back by itself.
+what_to_look_for: >
+  At 35 ms RP logs "software: Hot Reset requested", enters Recovery to
+  signal it, and moves to the red Hot Reset state; USP follows when it
+  receives TS1s with the Hot Reset bit. The switch then directs DSP1 and
+  DSP2 into Hot Reset too. After the 2 ms Hot Reset timer each link goes to
+  Detect, DL_Link_Active drops, equalization status bits are cleared, and
+  the whole bring-up from S01 repeats (including equalization at both
+  rates). link_down_count is 1 on links A, B and C.
+what_this_means: >
+  Hot Reset is an in-band reset carried by training sets. It resets
+  everything below the port that issues it, so all links below retrain
+  from scratch. A link that goes down because of a deliberate reset looks
+  very similar to an unexpected link-down in the timeline; the difference
+  is the software command (and Hot Reset state) right before it.
+likely_root_causes:
+  - "Software or firmware issued a Secondary Bus Reset (driver recovery, device reset, VM assignment)."
+  - "Error recovery (for example AER or DPC handling) reset the hierarchy."
+  - "A setpci/Bridge Control write during debugging."
+how_to_debug:
+  - "Check the kernel log for reset messages around the time devices disappeared (driver resets, AER recovery, 'secondary bus reset')."
+  - "Read Bridge Control on the root port (setpci -s <bdf> BRIDGE_CONTROL) to see the Secondary Bus Reset bit while debugging."
+  - "After the reset, confirm that LnkSta returns to the same speed/width as before (compare with the S01 baseline)."
+  - "If devices do not come back after a reset, debug them like a cold bring-up (Detect/Polling first)."
+mystery_hints:
+  - "Was there a software action right before the links went down?"
+  - "Which red state appears on the root port?"
+mystery_cause: "Software issued a Hot Reset (Secondary Bus Reset) on the root port; everything below retrained."

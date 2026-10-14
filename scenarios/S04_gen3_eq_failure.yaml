@@ -1,0 +1,65 @@
+id: S04
+title: Gen3 equalization failure falls back to Gen2
+description: >
+  On link B, equalization at 8.0 GT/s cannot pass Phase 2: the endpoint
+  (EP1, the requester in Phase 2) asks switch port DSP1 to try transmitter
+  presets, but none reaches the figure-of-merit target. The model retries
+  once, gives up on 8.0 GT/s and above, and falls back to the highest rate
+  that still works: 5.0 GT/s.
+topology: basic
+seed: 1
+duration_ms: 50
+faults:
+  - {type: eq_fail, link: B, rate: Gen3, phase: 2}
+expected:
+  summary: >
+    Link B falls back to Gen2 x16 after two failed 8.0 GT/s equalization
+    attempts (Phase 2); the reason is logged. Links A and C reach Gen4.
+  checks:
+    - {check: link, link: B, state: L0, speed: Gen2, width: x16}
+    - {check: link, link: A, state: L0, speed: Gen4, width: x16}
+    - {check: sequence, port: EP1, states: ["L0@Gen1", Recovery.Equalization.Phase2, Recovery.Speed, "L0@Gen1", Recovery.Equalization.Phase2, Recovery.Speed, "L0@Gen2"]}
+    - {check: never, ports: [DSP1, EP1], states: ["L0@Gen3", "L0@Gen4"]}
+    - {check: counter, link: B, counter: eq_attempts.Gen3, op: "==", value: 2}
+    - {check: counter, link: B, counter: eq_failures.Gen3, op: "==", value: 2}
+    - {check: counter, link: B, counter: eq_attempts.Gen4, op: "==", value: 0}
+    - {check: port, port: DSP1, eq_8gt_complete: false}
+    - {check: reason, port: DSP1, contains: "rate ceiling lowered to Gen2"}
+    - {check: devices, count: 7}
+symptom: >
+  The accelerator card works, but at a fraction of the bandwidth it should
+  have. Both ends claim 16 GT/s.
+what_to_look_for: >
+  On EP1's swimlane, two teal equalization blocks at Gen3 each end with a
+  jump to Recovery.Speed and a return to L0 at Gen1. The "eq" rows in the
+  event log show six rejected presets per attempt (FOM well below the
+  target of 60). After the second failure DSP1 logs "rate ceiling lowered
+  to Gen2", then performs a plain Gen1 -> Gen2 speed change (no
+  equalization is needed at 5.0 GT/s). In lspci view, LnkSta2 shows
+  Phase1+ but Phase2-, and LinkEqualizationRequest+. In the model
+  EqualizationComplete stays clear after a failure; on real hardware it may
+  read + after an unsuccessful attempt depending on the implementation, so
+  look at the per-phase bits and LinkEqualizationRequest first.
+what_this_means: >
+  A link that settles below the rate BOTH ends support, with failed
+  equalization phases and an equalization request flag, points at the
+  electrical channel at that rate, not at capabilities or software. Phase 2
+  is the downstream direction (switch transmitter -> endpoint receiver), so
+  that direction is the first suspect. Falling back keeps the system usable
+  but hides the problem unless someone compares LnkSta with LnkCap.
+likely_root_causes:
+  - "Channel loss too high at 8 GT/s: long traces, a riser, a cable, or a connector with poor margin."
+  - "Transmitter preset/coefficient settings (or BIOS/firmware equalization overrides) that do not suit this channel."
+  - "A retimer or redriver in the path that is misconfigured or marginal."
+  - "Marginal signal integrity: crosstalk, impedance discontinuity, damaged connector, contamination."
+  - "Reference clock quality problems that only show up at higher rates."
+how_to_debug:
+  - "lspci -vvv on both ends: LnkSta speed 5GT/s with LnkCap 16GT/s on both (pciutils 3.8+ marks '(downgraded)' only on the endpoint side); then LnkSta2: per-phase bits and LinkEqualizationRequest+ first, since EqualizationComplete may read + after a failed attempt on some implementations."
+  - "Force a retrain at 8 GT/s on the downstream port (LnkCtl2 Target Link Speed, then Retrain Link with setpci) and watch whether it falls back again."
+  - "Check AER correctable counters (Receiver Error, Bad TLP, Bad DLLP) after forcing the higher rate."
+  - "Read the equalization presets/coefficients the ports settled on, if the vendor exposes them; compare with a known-good board."
+  - "On the bench: eye/margin measurements (scope or BERT, Lane Margining at the Receiver on 16 GT/s capable parts), and swap slot, cable or riser to isolate the channel."
+mystery_hints:
+  - "Both ends support 16 GT/s. What could stop the link above 5 GT/s?"
+  - "Which equalization phase failed, and which direction does that phase tune?"
+mystery_cause: "8.0 GT/s equalization fails on one link (Phase 2: the endpoint cannot tune the switch port's transmitter)."

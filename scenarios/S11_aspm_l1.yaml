@@ -1,0 +1,59 @@
+id: S11
+title: ASPM L1 entry and exit
+description: >
+  Point-to-point link with ASPM L1 enabled. Once the link is at Gen4 and
+  idle for 2 ms, the endpoint asks to enter L1 (the PM handshake is
+  symbolic in the model) and both sides send EIOS. After 3 ms in L1 the
+  host has traffic again, so the root port wakes the link. Leaving L1
+  always goes through Recovery. This happens twice.
+topology: point_to_point
+seed: 1
+duration_ms: 40
+config:
+  aspm_l1: true
+  aspm_l1_cycles: 2
+expected:
+  summary: >
+    The link goes L0 -> L1 -> Recovery -> L0 twice, with no errors and no
+    speed change; final state L0 Gen4 x16.
+  checks:
+    - {check: link, link: A, state: L0, speed: Gen4, width: x16}
+    - check: sequence
+      port: EP
+      states: ["L0@Gen4", L1.Entry, L1.Idle, Recovery.RcvrLock, Recovery.RcvrCfg, Recovery.Idle, "L0@Gen4",
+               L1.Entry, L1.Idle, Recovery.RcvrLock, "L0@Gen4"]
+    - {check: counter, link: A, counter: l1_entries, op: "==", value: 2}
+    - {check: counter, link: A, counter: recovery_causes.L1 exit, op: "==", value: 2}
+    - {check: counter, link: A, counter: flap_count, op: "==", value: 0}
+    - {check: counter, link: A, counter: link_down_count, op: "==", value: 0}
+    - {check: port, port: EP, dl_link_active: true}
+    - {check: devices, count: 2}
+symptom: >
+  The link status says L0 at full speed, but a debug trace shows the link
+  repeatedly leaving L0, with no errors logged.
+what_to_look_for: >
+  Indigo L1 bars of about 3 ms each, entered from L0 and always left through
+  blue Recovery (RcvrLock -> RcvrCfg -> Idle) back to L0 at the same rate.
+  The recovery counter counts these exits (recovery_causes shows "L1
+  exit"), but flap_count stays 0 because no error caused them.
+  DL_Link_Active stays set the whole time: L1 is a power state, not a link
+  failure.
+what_this_means: >
+  Not every Recovery is a problem. ASPM L1 trades exit latency for power:
+  each exit costs a Recovery pass. Separate recoveries by cause before
+  drawing conclusions; a recovery count without errors and with L1
+  entries next to it is usually power management working as configured.
+  If a device misbehaves only with ASPM enabled, the L1 exit path is the
+  first suspect.
+likely_root_causes:
+  - "ASPM L1 is enabled (normal power management)."
+  - "If there are problems: L1 exit latency longer than the device tolerates, or devices with ASPM errata."
+how_to_debug:
+  - "lspci -vvv: LnkCap shows ASPM support and exit latencies; LnkCtl shows whether ASPM L1 is enabled."
+  - "Check the kernel ASPM policy (/sys/module/pcie_aspm/parameters/policy) and per-device link power settings."
+  - "To test whether ASPM is involved, disable it (kernel parameter pcie_aspm=off or the BIOS setting) and compare."
+  - "Look at AER counters: L1 exits should not produce correctable errors."
+mystery_hints:
+  - "Were there any receiver errors?"
+  - "What state does the link visit right before each Recovery?"
+mystery_cause: "ASPM L1 power management: the link sleeps when idle and wakes through Recovery when traffic arrives."

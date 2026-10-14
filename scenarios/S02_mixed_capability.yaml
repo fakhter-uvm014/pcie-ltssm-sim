@@ -1,0 +1,51 @@
+id: S02
+title: Mixed capability (Gen2-only endpoint)
+description: >
+  Endpoint 2 only supports 5.0 GT/s (Gen2). Its TS1/TS2 ordered sets
+  advertise rates up to Gen2, so the switch downstream port DSP2 never asks
+  for 8 or 16 GT/s on link C. The other links are unaffected.
+topology: basic
+seed: 1
+duration_ms: 50
+faults:
+  - {type: capability, port: EP2, max_speed: Gen2}
+expected:
+  summary: >
+    Link C trains at Gen2 x4 with no equalization; links A and B reach Gen4.
+  checks:
+    - {check: link, link: C, state: L0, speed: Gen2, width: x4}
+    - {check: link, link: A, state: L0, speed: Gen4, width: x16}
+    - {check: link, link: B, state: L0, speed: Gen4, width: x16}
+    - {check: sequence, port: DSP2, states: ["L0@Gen1", Recovery.RcvrLock, Recovery.Speed, "L0@Gen2"]}
+    - {check: never, ports: [DSP2, EP2], state: Recovery.Equalization}
+    - {check: counter, link: C, counter: eq_attempts.Gen3, op: "==", value: 0}
+    - {check: reason, port: DSP2, contains: "partner advertised up to Gen2"}
+    - {check: devices, count: 7}
+symptom: >
+  One device works but its link is slower than the switch port it is
+  plugged into.
+what_to_look_for: >
+  Link C makes exactly one speed change (Gen1 -> Gen2) and no teal
+  Equalization bars: 5.0 GT/s does not use equalization. In the event log,
+  DSP2's L0 -> Recovery.RcvrLock reason says the cap comes from the partner
+  ("partner advertised up to Gen2"). In the lspci view, compare DSP2's
+  LnkSta (Speed 5GT/s) with its own LnkCap (16GT/s) yourself: like
+  pciutils 3.8+, no "(downgraded)" marker is printed on a downstream port.
+  EP2 shows no marker either, because 5GT/s is its own maximum.
+what_this_means: >
+  A link runs at the highest rate both ends advertise. A speed below one
+  port's own LnkCap is expected when the other side is slower; it is only a
+  problem when the speed is lower than BOTH ends' capabilities (see S04,
+  S05 and S16).
+likely_root_causes:
+  - "The card is simply an older generation (normal)."
+  - "The device's firmware or a strap limits its advertised speed."
+  - "A riser or retimer in the path only supports the lower rate."
+how_to_debug:
+  - "Compare LnkCap of BOTH ends with lspci -vvv: the slower LnkCap explains the speed."
+  - "Check LnkCap2 'Supported Link Speeds' on both ends; it lists every rate the port supports."
+  - "If both ends claim a higher rate, this is not a capability mismatch: go to the EQ or software-cap debug paths."
+mystery_hints:
+  - "Which port's LnkCap is the lowest on that link?"
+  - "Did the slow link ever try equalization?"
+mystery_cause: "The endpoint only supports 5.0 GT/s (Gen2); the link runs at the endpoint's maximum."

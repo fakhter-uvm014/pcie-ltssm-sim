@@ -1,0 +1,1318 @@
+{
+  "format": "pcie-ltssm-sim trace",
+  "format_version": 1,
+  "scenario": {
+    "id": "S09",
+    "title": "Upstream link down (link A never trains)",
+    "description": "Every lane of link A (root port to switch) is open. Neither end detects a receiver, so link A cycles in Detect forever. Because the switch holds its downstream ports until link A reaches L0 (dsp_start = wait_for_upstream), links B, C and D never start, and the endpoints only see receivers that are held in reset.",
+    "symptom": "None of the devices behind the switch appear, and neither does the switch itself.",
+    "topology": "basic",
+    "faults": [
+      "every lane of link A is open (no receiver termination, no signal)"
+    ],
+    "fault_specs": [
+      {
+        "type": "dead_lanes",
+        "link": "A",
+        "lanes": "all"
+      }
+    ],
+    "commands": [],
+    "settings": [],
+    "expected": {
+      "summary": "Link A stays in Detect; the switch downstream ports never leave Detect.Quiet; enumeration finds only the root port.",
+      "checks": [
+        {
+          "check": "link",
+          "link": "A",
+          "state": "Detect"
+        },
+        {
+          "check": "only",
+          "ports": [
+            "DSP1",
+            "DSP2",
+            "DSP3"
+          ],
+          "states": [
+            "Detect.Quiet"
+          ]
+        },
+        {
+          "check": "never",
+          "ports": [
+            "EP1",
+            "EP2"
+          ],
+          "state": "Polling"
+        },
+        {
+          "check": "counter",
+          "link": "A",
+          "counter": "detect_cycles",
+          "op": ">=",
+          "value": 6
+        },
+        {
+          "check": "devices",
+          "count": 1,
+          "absent": [
+            "USP",
+            "EP1",
+            "EP2"
+          ]
+        }
+      ]
+    },
+    "what_to_look_for": "RP and USP both show grey Detect cycles every 12 ms. The three switch downstream ports show a single Detect.Quiet bar for the whole run, with a status event \"held in Detect.Quiet: switch upstream link A not in L0 yet\". EP1 and EP2 also cycle in Detect because a port held in reset keeps its receiver high-impedance. The enumeration tree has only 00:01.0.",
+    "what_this_means": "When everything behind a point in the hierarchy is missing, look at the first link above the missing devices. A switch cannot be enumerated if its upstream link is down, and a switch that waits for its upstream link will not train its downstream links either. Fixing link A fixes everything.",
+    "likely_root_causes": [
+      "Switch card or cable not seated; open connector or cable.",
+      "Switch held in reset (PERST# asserted) or not powered.",
+      "Missing reference clock to the switch.",
+      "Switch firmware/EEPROM not loaded, so the switch never enables its upstream port."
+    ],
+    "how_to_debug": [
+      "lspci -t: the root port shows an empty bus range; nothing is behind it.",
+      "lspci -vvv on the root port: LnkSta Width x0, DLActive-.",
+      "Check the switch's power rails, PERST#, REFCLK and any 'switch ready' indicator.",
+      "If the switch has a management interface (I2C/SMBus/UART), read its upstream port LTSSM state and firmware status.",
+      "Retry with dsp_start: together (scenario config) to see how the timeline changes, and compare."
+    ],
+    "mystery_hints": [
+      "Which is the highest point in the tree that is missing?",
+      "Do the switch downstream ports even try to train?"
+    ],
+    "mystery_cause": "The root-port-to-switch link has no connection at all, so the switch and everything behind it are missing."
+  },
+  "topology": {
+    "name": "basic",
+    "description": "Root port, a switch with three downstream ports, two endpoints and one empty slot.",
+    "devices": [
+      {
+        "id": "RC",
+        "kind": "root_complex",
+        "label": "Root Complex",
+        "ports": [
+          "RP"
+        ]
+      },
+      {
+        "id": "SW",
+        "kind": "switch",
+        "label": "Switch",
+        "ports": [
+          "USP",
+          "DSP1",
+          "DSP2",
+          "DSP3"
+        ]
+      },
+      {
+        "id": "EP1",
+        "kind": "endpoint",
+        "label": "Accelerator",
+        "ports": [
+          "EP1"
+        ]
+      },
+      {
+        "id": "EP2",
+        "kind": "endpoint",
+        "label": "NVMe SSD",
+        "ports": [
+          "EP2"
+        ]
+      }
+    ],
+    "ports": [
+      {
+        "name": "RP",
+        "role": "DSP",
+        "kind": "root_port",
+        "device": "RC",
+        "label": "Root Port",
+        "max_speed": "Gen4",
+        "max_width": "x16",
+        "link": "A"
+      },
+      {
+        "name": "USP",
+        "role": "USP",
+        "kind": "switch_upstream",
+        "device": "SW",
+        "label": "Switch Upstream Port",
+        "max_speed": "Gen4",
+        "max_width": "x16",
+        "link": "A"
+      },
+      {
+        "name": "DSP1",
+        "role": "DSP",
+        "kind": "switch_downstream",
+        "device": "SW",
+        "label": "Switch Downstream Port 1",
+        "max_speed": "Gen4",
+        "max_width": "x16",
+        "link": "B"
+      },
+      {
+        "name": "DSP2",
+        "role": "DSP",
+        "kind": "switch_downstream",
+        "device": "SW",
+        "label": "Switch Downstream Port 2",
+        "max_speed": "Gen4",
+        "max_width": "x8",
+        "link": "C"
+      },
+      {
+        "name": "DSP3",
+        "role": "DSP",
+        "kind": "switch_downstream",
+        "device": "SW",
+        "label": "Switch Downstream Port 3",
+        "max_speed": "Gen4",
+        "max_width": "x8",
+        "link": "D"
+      },
+      {
+        "name": "EP1",
+        "role": "USP",
+        "kind": "endpoint",
+        "device": "EP1",
+        "label": "Accelerator",
+        "max_speed": "Gen4",
+        "max_width": "x16",
+        "link": "B"
+      },
+      {
+        "name": "EP2",
+        "role": "USP",
+        "kind": "endpoint",
+        "device": "EP2",
+        "label": "NVMe SSD",
+        "max_speed": "Gen4",
+        "max_width": "x4",
+        "link": "C"
+      }
+    ],
+    "links": [
+      {
+        "name": "A",
+        "dsp": "RP",
+        "usp": "USP",
+        "lanes": 16
+      },
+      {
+        "name": "B",
+        "dsp": "DSP1",
+        "usp": "EP1",
+        "lanes": 16
+      },
+      {
+        "name": "C",
+        "dsp": "DSP2",
+        "usp": "EP2",
+        "lanes": 4
+      },
+      {
+        "name": "D",
+        "dsp": "DSP3",
+        "usp": null,
+        "lanes": 8
+      }
+    ]
+  },
+  "seed": 1,
+  "duration_ns": 50000000,
+  "config": {
+    "os_per_burst": 32,
+    "burst_batch_after": 16,
+    "burst_batch_factor": 8,
+    "link_delay_ns": 10,
+    "rx_consecutive_required": 8,
+    "rx_consecutive_short": 2,
+    "detect_quiet_ns": 12000000,
+    "detect_active_ns": 1000,
+    "polling_active_ns": 24000000,
+    "polling_active_min_ts1_tx": 1024,
+    "polling_configuration_ns": 48000000,
+    "polling_cfg_min_ts2_tx_after_rx": 16,
+    "silent_partner_to_polling_compliance": true,
+    "cfg_linkwidth_start_ns": 24000000,
+    "cfg_substate_timeout_ns": 2000000,
+    "cfg_complete_min_ts2_tx_after_rx": 16,
+    "idle_min_tx_after_rx": 16,
+    "dl_active_delay_ns": 5000,
+    "l0_idle_bursts": 4,
+    "speed_change_delay_ns": 20000,
+    "l0_error_check_ns": 50000,
+    "recovery_rcvrlock_ns": 2000000,
+    "recovery_rcvrcfg_ns": 2000000,
+    "recovery_idle_ns": 2000000,
+    "recovery_speed_ei_ns": 2000,
+    "rcvrcfg_min_ts2_tx_after_rx": 16,
+    "gen2_step": false,
+    "eq_max_attempts": 2,
+    "eq_phase01_timeout_ns": 12000000,
+    "eq_phase23_timeout_ns": 24000000,
+    "eq_preset_eval_ns": 400000,
+    "eq_max_presets_per_phase": 6,
+    "eq_fom_target": 60,
+    "eq_search_order": [
+      "P7",
+      "P8",
+      "P6",
+      "P5",
+      "P9",
+      "P4",
+      "P3",
+      "P2",
+      "P1",
+      "P0",
+      "P10"
+    ],
+    "hot_reset_ns": 2000000,
+    "loopback_exit_ns": 2000,
+    "disabled_ts1_bursts": 4,
+    "aspm_l1": false,
+    "aspm_l1_idle_ns": 2000000,
+    "aspm_l1_cycles": 2,
+    "l1_entry_settle_ns": 2000,
+    "l1_residency_ns": 3000000,
+    "aspm_l0s": false,
+    "aspm_l0s_idle_ns": 1000000,
+    "l0s_residency_ns": 200000,
+    "n_fts": 64,
+    "dsp_start": "wait_for_upstream",
+    "duration_ns": 50000000
+  },
+  "stats": {
+    "events": 42,
+    "state_events": 39,
+    "engine_events": 32
+  },
+  "events": [
+    {
+      "t_ns": 0,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Reset",
+      "to": "Detect.Quiet",
+      "reason": "fundamental reset released (PERST# deasserted): LTSSM starts in Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "init"
+    },
+    {
+      "t_ns": 0,
+      "kind": "state",
+      "port": "USP",
+      "link": "A",
+      "from": "Reset",
+      "to": "Detect.Quiet",
+      "reason": "fundamental reset released (PERST# deasserted): LTSSM starts in Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "init"
+    },
+    {
+      "t_ns": 0,
+      "kind": "state",
+      "port": "DSP1",
+      "link": "B",
+      "from": "Reset",
+      "to": "Detect.Quiet",
+      "reason": "fundamental reset released (PERST# deasserted): LTSSM starts in Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "init"
+    },
+    {
+      "t_ns": 0,
+      "kind": "status",
+      "port": "DSP1",
+      "link": "B",
+      "from": "Detect.Quiet",
+      "to": "Detect.Quiet",
+      "reason": "held in Detect.Quiet: switch upstream link A not in L0 yet (dsp_start=wait_for_upstream)",
+      "speed": "Gen1",
+      "width": "x0",
+      "detail": {
+        "held": true
+      }
+    },
+    {
+      "t_ns": 0,
+      "kind": "state",
+      "port": "DSP2",
+      "link": "C",
+      "from": "Reset",
+      "to": "Detect.Quiet",
+      "reason": "fundamental reset released (PERST# deasserted): LTSSM starts in Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "init"
+    },
+    {
+      "t_ns": 0,
+      "kind": "status",
+      "port": "DSP2",
+      "link": "C",
+      "from": "Detect.Quiet",
+      "to": "Detect.Quiet",
+      "reason": "held in Detect.Quiet: switch upstream link A not in L0 yet (dsp_start=wait_for_upstream)",
+      "speed": "Gen1",
+      "width": "x0",
+      "detail": {
+        "held": true
+      }
+    },
+    {
+      "t_ns": 0,
+      "kind": "state",
+      "port": "DSP3",
+      "link": "D",
+      "from": "Reset",
+      "to": "Detect.Quiet",
+      "reason": "fundamental reset released (PERST# deasserted): LTSSM starts in Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "init"
+    },
+    {
+      "t_ns": 0,
+      "kind": "status",
+      "port": "DSP3",
+      "link": "D",
+      "from": "Detect.Quiet",
+      "to": "Detect.Quiet",
+      "reason": "held in Detect.Quiet: switch upstream link A not in L0 yet (dsp_start=wait_for_upstream)",
+      "speed": "Gen1",
+      "width": "x0",
+      "detail": {
+        "held": true
+      }
+    },
+    {
+      "t_ns": 0,
+      "kind": "state",
+      "port": "EP1",
+      "link": "B",
+      "from": "Reset",
+      "to": "Detect.Quiet",
+      "reason": "fundamental reset released (PERST# deasserted): LTSSM starts in Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "init"
+    },
+    {
+      "t_ns": 0,
+      "kind": "state",
+      "port": "EP2",
+      "link": "C",
+      "from": "Reset",
+      "to": "Detect.Quiet",
+      "reason": "fundamental reset released (PERST# deasserted): LTSSM starts in Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "init"
+    },
+    {
+      "t_ns": 12000000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 12000000,
+      "kind": "state",
+      "port": "USP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 12000000,
+      "kind": "state",
+      "port": "EP1",
+      "link": "B",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 12000000,
+      "kind": "state",
+      "port": "EP2",
+      "link": "C",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 12001000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 12001000,
+      "kind": "state",
+      "port": "USP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 12001000,
+      "kind": "state",
+      "port": "EP1",
+      "link": "B",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 12001000,
+      "kind": "state",
+      "port": "EP2",
+      "link": "C",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 24001000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 24001000,
+      "kind": "state",
+      "port": "USP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 24001000,
+      "kind": "state",
+      "port": "EP1",
+      "link": "B",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 24001000,
+      "kind": "state",
+      "port": "EP2",
+      "link": "C",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 24002000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 24002000,
+      "kind": "state",
+      "port": "USP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 24002000,
+      "kind": "state",
+      "port": "EP1",
+      "link": "B",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 24002000,
+      "kind": "state",
+      "port": "EP2",
+      "link": "C",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 36002000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 36002000,
+      "kind": "state",
+      "port": "USP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 36002000,
+      "kind": "state",
+      "port": "EP1",
+      "link": "B",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 36002000,
+      "kind": "state",
+      "port": "EP2",
+      "link": "C",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 36003000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 36003000,
+      "kind": "state",
+      "port": "USP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 36003000,
+      "kind": "state",
+      "port": "EP1",
+      "link": "B",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 36003000,
+      "kind": "state",
+      "port": "EP2",
+      "link": "C",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 48003000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 48003000,
+      "kind": "state",
+      "port": "USP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 48003000,
+      "kind": "state",
+      "port": "EP1",
+      "link": "B",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 48003000,
+      "kind": "state",
+      "port": "EP2",
+      "link": "C",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 48004000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 48004000,
+      "kind": "state",
+      "port": "USP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 48004000,
+      "kind": "state",
+      "port": "EP1",
+      "link": "B",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    },
+    {
+      "t_ns": 48004000,
+      "kind": "state",
+      "port": "EP2",
+      "link": "C",
+      "from": "Detect.Active",
+      "to": "Detect.Quiet",
+      "reason": "no receiver termination detected on any lane",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T04"
+    }
+  ],
+  "links": {
+    "A": {
+      "name": "A",
+      "dsp": "RP",
+      "usp": "USP",
+      "physical_lanes": 16,
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "up": false,
+      "dl_link_active": false,
+      "lane_reversal": false,
+      "faults": [
+        "lanes 0-15 open (no termination, no signal)"
+      ],
+      "counters": {
+        "time_to_l0_ns": null,
+        "time_to_final_speed_ns": null,
+        "recovery_count": 0,
+        "flap_count": 0,
+        "recovery_causes": {},
+        "speed_changes": 0,
+        "detect_cycles": 8,
+        "link_down_count": 0,
+        "l1_entries": 0,
+        "rx_errors": 0,
+        "eq_attempts": {
+          "Gen3": 0,
+          "Gen4": 0
+        },
+        "eq_failures": {
+          "Gen3": 0,
+          "Gen4": 0
+        }
+      }
+    },
+    "B": {
+      "name": "B",
+      "dsp": "DSP1",
+      "usp": "EP1",
+      "physical_lanes": 16,
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "up": false,
+      "dl_link_active": false,
+      "lane_reversal": false,
+      "faults": [],
+      "counters": {
+        "time_to_l0_ns": null,
+        "time_to_final_speed_ns": null,
+        "recovery_count": 0,
+        "flap_count": 0,
+        "recovery_causes": {},
+        "speed_changes": 0,
+        "detect_cycles": 4,
+        "link_down_count": 0,
+        "l1_entries": 0,
+        "rx_errors": 0,
+        "eq_attempts": {
+          "Gen3": 0,
+          "Gen4": 0
+        },
+        "eq_failures": {
+          "Gen3": 0,
+          "Gen4": 0
+        }
+      }
+    },
+    "C": {
+      "name": "C",
+      "dsp": "DSP2",
+      "usp": "EP2",
+      "physical_lanes": 4,
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "up": false,
+      "dl_link_active": false,
+      "lane_reversal": false,
+      "faults": [],
+      "counters": {
+        "time_to_l0_ns": null,
+        "time_to_final_speed_ns": null,
+        "recovery_count": 0,
+        "flap_count": 0,
+        "recovery_causes": {},
+        "speed_changes": 0,
+        "detect_cycles": 4,
+        "link_down_count": 0,
+        "l1_entries": 0,
+        "rx_errors": 0,
+        "eq_attempts": {
+          "Gen3": 0,
+          "Gen4": 0
+        },
+        "eq_failures": {
+          "Gen3": 0,
+          "Gen4": 0
+        }
+      }
+    },
+    "D": {
+      "name": "D",
+      "dsp": "DSP3",
+      "usp": null,
+      "physical_lanes": 8,
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "up": false,
+      "dl_link_active": false,
+      "lane_reversal": false,
+      "faults": [
+        "empty slot: no device on this link"
+      ],
+      "counters": {
+        "time_to_l0_ns": null,
+        "time_to_final_speed_ns": null,
+        "recovery_count": 0,
+        "flap_count": 0,
+        "recovery_causes": {},
+        "speed_changes": 0,
+        "detect_cycles": 0,
+        "link_down_count": 0,
+        "l1_entries": 0,
+        "rx_errors": 0,
+        "eq_attempts": {
+          "Gen3": 0,
+          "Gen4": 0
+        },
+        "eq_failures": {
+          "Gen3": 0,
+          "Gen4": 0
+        }
+      }
+    }
+  },
+  "ports": {
+    "RP": {
+      "name": "RP",
+      "role": "DSP",
+      "device": "RC",
+      "label": "Root Port",
+      "link": "A",
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "link_training": false,
+      "dl_link_active": false,
+      "max_speed": "Gen4",
+      "max_width": "x16",
+      "target_link_speed": "Gen4",
+      "lane_reversed": false,
+      "eq_8gt_complete": false,
+      "eq_16gt_complete": false,
+      "eq": {
+        "Gen3": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        },
+        "Gen4": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        }
+      },
+      "eq_presets": {},
+      "rate_ceiling": "Gen4",
+      "rx_errors": 0,
+      "detect_cycles": 4,
+      "held": false,
+      "aspm_l1": false
+    },
+    "USP": {
+      "name": "USP",
+      "role": "USP",
+      "device": "SW",
+      "label": "Switch Upstream Port",
+      "link": "A",
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "link_training": false,
+      "dl_link_active": false,
+      "max_speed": "Gen4",
+      "max_width": "x16",
+      "target_link_speed": "Gen4",
+      "lane_reversed": false,
+      "eq_8gt_complete": false,
+      "eq_16gt_complete": false,
+      "eq": {
+        "Gen3": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        },
+        "Gen4": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        }
+      },
+      "eq_presets": {},
+      "rate_ceiling": "Gen4",
+      "rx_errors": 0,
+      "detect_cycles": 4,
+      "held": false,
+      "aspm_l1": false
+    },
+    "DSP1": {
+      "name": "DSP1",
+      "role": "DSP",
+      "device": "SW",
+      "label": "Switch Downstream Port 1",
+      "link": "B",
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "link_training": false,
+      "dl_link_active": false,
+      "max_speed": "Gen4",
+      "max_width": "x16",
+      "target_link_speed": "Gen4",
+      "lane_reversed": false,
+      "eq_8gt_complete": false,
+      "eq_16gt_complete": false,
+      "eq": {
+        "Gen3": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        },
+        "Gen4": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        }
+      },
+      "eq_presets": {},
+      "rate_ceiling": "Gen4",
+      "rx_errors": 0,
+      "detect_cycles": 0,
+      "held": true,
+      "aspm_l1": false
+    },
+    "DSP2": {
+      "name": "DSP2",
+      "role": "DSP",
+      "device": "SW",
+      "label": "Switch Downstream Port 2",
+      "link": "C",
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "link_training": false,
+      "dl_link_active": false,
+      "max_speed": "Gen4",
+      "max_width": "x8",
+      "target_link_speed": "Gen4",
+      "lane_reversed": false,
+      "eq_8gt_complete": false,
+      "eq_16gt_complete": false,
+      "eq": {
+        "Gen3": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        },
+        "Gen4": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        }
+      },
+      "eq_presets": {},
+      "rate_ceiling": "Gen4",
+      "rx_errors": 0,
+      "detect_cycles": 0,
+      "held": true,
+      "aspm_l1": false
+    },
+    "DSP3": {
+      "name": "DSP3",
+      "role": "DSP",
+      "device": "SW",
+      "label": "Switch Downstream Port 3",
+      "link": "D",
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "link_training": false,
+      "dl_link_active": false,
+      "max_speed": "Gen4",
+      "max_width": "x8",
+      "target_link_speed": "Gen4",
+      "lane_reversed": false,
+      "eq_8gt_complete": false,
+      "eq_16gt_complete": false,
+      "eq": {
+        "Gen3": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        },
+        "Gen4": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        }
+      },
+      "eq_presets": {},
+      "rate_ceiling": "Gen4",
+      "rx_errors": 0,
+      "detect_cycles": 0,
+      "held": true,
+      "aspm_l1": false
+    },
+    "EP1": {
+      "name": "EP1",
+      "role": "USP",
+      "device": "EP1",
+      "label": "Accelerator",
+      "link": "B",
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "link_training": false,
+      "dl_link_active": false,
+      "max_speed": "Gen4",
+      "max_width": "x16",
+      "target_link_speed": "Gen4",
+      "lane_reversed": false,
+      "eq_8gt_complete": false,
+      "eq_16gt_complete": false,
+      "eq": {
+        "Gen3": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        },
+        "Gen4": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        }
+      },
+      "eq_presets": {},
+      "rate_ceiling": "Gen4",
+      "rx_errors": 0,
+      "detect_cycles": 4,
+      "held": false,
+      "aspm_l1": false
+    },
+    "EP2": {
+      "name": "EP2",
+      "role": "USP",
+      "device": "EP2",
+      "label": "NVMe SSD",
+      "link": "C",
+      "state": "Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "link_training": false,
+      "dl_link_active": false,
+      "max_speed": "Gen4",
+      "max_width": "x4",
+      "target_link_speed": "Gen4",
+      "lane_reversed": false,
+      "eq_8gt_complete": false,
+      "eq_16gt_complete": false,
+      "eq": {
+        "Gen3": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        },
+        "Gen4": {
+          "complete": false,
+          "phase1": false,
+          "phase2": false,
+          "phase3": false,
+          "link_eq_request": false
+        }
+      },
+      "eq_presets": {},
+      "rate_ceiling": "Gen4",
+      "rx_errors": 0,
+      "detect_cycles": 4,
+      "held": false,
+      "aspm_l1": false
+    }
+  },
+  "enumeration": {
+    "device_count": 1,
+    "functions": [
+      {
+        "bdf": "00:01.0",
+        "bus": 0,
+        "dev": 1,
+        "fn": 0,
+        "port": "RP",
+        "kind": "root_port",
+        "header": "Type 1",
+        "name": "Root Port",
+        "vendor_id": "0x1234",
+        "device_id": "0x7001",
+        "parent": null,
+        "primary": 0,
+        "secondary": 1,
+        "subordinate": 1,
+        "children": []
+      }
+    ],
+    "missing": [
+      {
+        "behind": "RP",
+        "port": "USP",
+        "reason": "link A is not up (DL_Link_Active=0), Vendor ID read returns 0xFFFF"
+      }
+    ],
+    "lspci_t": "-[0000:00]---01.0-[01]--"
+  },
+  "result": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "link A ends in Detect",
+        "passed": true,
+        "detail": "actual: Detect.Quiet Gen1 x0 (down)"
+      },
+      {
+        "name": "DSP1/DSP2/DSP3 stays in Detect.Quiet",
+        "passed": true,
+        "detail": "no other state seen"
+      },
+      {
+        "name": "EP1/EP2 never enters Polling",
+        "passed": true,
+        "detail": "not seen"
+      },
+      {
+        "name": "link A detect_cycles >= 6",
+        "passed": true,
+        "detail": "actual: 8"
+      },
+      {
+        "name": "enumeration finds 1 functions, USP absent, EP1 absent, EP2 absent",
+        "passed": true,
+        "detail": "actual: 1 functions (RP)"
+      },
+      {
+        "name": "invariant: no L0 at 8.0 GT/s without 8 GT/s equalization complete",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "invariant: no L0 at 16.0 GT/s without 16 GT/s equalization complete",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "invariant: 16.0 GT/s never attempted before 8 GT/s equalization is complete",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "invariant: switch downstream ports stay in Detect.Quiet until the upstream link is up",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "invariant: every transition matches a row of the transition table",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "invariant: event times never go backwards",
+        "passed": true,
+        "detail": "ok"
+      }
+    ]
+  }
+}

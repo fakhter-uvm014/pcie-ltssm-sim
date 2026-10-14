@@ -1,0 +1,55 @@
+id: S06
+title: Lane failure (lanes 8-15 open on link A)
+description: >
+  Lanes 8 to 15 of link A (root port to switch) are open: no receiver
+  termination and no signal. Receiver detection only finds lanes 0-7, so
+  the link trains on those lanes and comes up x8 at full speed.
+topology: basic
+seed: 1
+duration_ms: 50
+faults:
+  - {type: dead_lanes, link: A, lanes: "8-15"}
+expected:
+  summary: >
+    Link A trains at Gen4 x8 instead of x16; links B and C are unaffected.
+  checks:
+    - {check: link, link: A, state: L0, speed: Gen4, width: x8}
+    - {check: port, port: RP, width: x8, max_width: x16}
+    - {check: port, port: USP, width: x8}
+    - {check: reason, port: RP, contains: "lanes 0-7 (8 of 16)"}
+    - {check: link, link: B, state: L0, speed: Gen4, width: x16}
+    - {check: devices, count: 7}
+symptom: >
+  Everything enumerates and runs at full speed, but upstream bandwidth is
+  half of what it should be.
+what_to_look_for: >
+  The Detect.Active -> Polling.Active reason for RP and USP says "lanes 0-7
+  (8 of 16)". From Polling onward the width column says x8. Nothing else
+  looks wrong: no errors, no flaps, full Gen4 speed. Only the width gives
+  it away: in the lspci view the switch upstream port shows
+  "Width x8 (downgraded)"; on the root port, compare LnkSta with LnkCap
+  yourself (no marker is printed on downstream ports).
+what_this_means: >
+  Width is normally set in Configuration, from the lanes that work on both
+  sides (on real links it can change later through Recovery ->
+  Configuration, which the model does not do). Lanes that fail detection
+  are never used. The link chooses
+  the widest supported width (x16, x8, x4, x2, x1) that starts at lane 0,
+  so losing upper lanes costs bandwidth but not the link. Losing lane 0
+  would be much worse (try it: change the fault to lanes "0").
+likely_root_causes:
+  - "Damaged connector pins or a partially inserted card (upper lanes are at the far end of the connector)."
+  - "Broken traces, missing AC coupling capacitors or a bad riser/cable on those lanes."
+  - "Slot bifurcation configured as x8x8 (BIOS setting or strap) instead of x16."
+  - "Mechanical slot is x16 but only x8 is wired electrically (check the board documentation)."
+  - "On some designs, lanes that fail equalization are dropped and the link retrains narrower."
+how_to_debug:
+  - "lspci -vvv on both ends: LnkCap Width x16 but LnkSta Width x8 (marked '(downgraded)' on the upstream-facing end by pciutils 3.8+)."
+  - "Check BIOS bifurcation settings for the slot and the board's lane routing documentation."
+  - "Reseat the card; inspect the connector; try another slot or riser."
+  - "If the parts support it, check the per-lane error status (LaneErrStat in the Secondary PCI Express capability) and per-lane margining."
+  - "Compare cat /sys/bus/pci/devices/<bdf>/current_link_width with max_link_width."
+mystery_hints:
+  - "Is the speed lower than expected, or is it something else?"
+  - "Which lanes did receiver detection find?"
+mystery_cause: "Half the lanes of the link are open (damaged connector, broken lanes or bifurcation setting)."

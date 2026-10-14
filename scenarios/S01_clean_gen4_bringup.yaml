@@ -1,0 +1,61 @@
+id: S01
+title: Clean Gen4 bring-up
+description: >
+  No faults. The root port trains link A to the switch, the switch releases
+  its downstream ports, and every populated link trains at 2.5 GT/s first,
+  then steps to 8.0 GT/s (with equalization) and 16.0 GT/s (with
+  equalization). Slot 3 is empty, so link D keeps looking for a receiver.
+  Use this run as the healthy reference for every other scenario.
+topology: basic
+seed: 1
+duration_ms: 50
+faults: []
+expected:
+  summary: >
+    Links A and B reach L0 at Gen4 x16, link C at Gen4 x4 (the NVMe SSD is an
+    x4 device in an x8 slot), link D stays in Detect (empty slot), and
+    enumeration finds 7 functions.
+  checks:
+    - {check: link, link: A, state: L0, speed: Gen4, width: x16}
+    - {check: link, link: B, state: L0, speed: Gen4, width: x16}
+    - {check: link, link: C, state: L0, speed: Gen4, width: x4}
+    - {check: link, link: D, state: Detect}
+    - check: sequence
+      port: RP
+      states: [Detect.Quiet, Detect.Active, Polling.Active, Polling.Configuration,
+               Configuration.Linkwidth.Start, Configuration.Complete, Configuration.Idle,
+               "L0@Gen1", Recovery.Speed, Recovery.Equalization.Phase1, "L0@Gen3",
+               Recovery.Equalization.Phase1, "L0@Gen4"]
+    - {check: sequence, port: USP, states: [Recovery.Equalization.Phase0, Recovery.Equalization.Phase1, Recovery.Equalization.Phase2, Recovery.Equalization.Phase3, "L0@Gen3"]}
+    - {check: port, port: EP1, eq_8gt_complete: true, eq_16gt_complete: true}
+    - {check: counter, link: A, counter: flap_count, op: "==", value: 0}
+    - {check: counter, link: A, counter: speed_changes, op: "==", value: 2}
+    - {check: counter, link: B, counter: eq_failures.Gen4, op: "==", value: 0}
+    - {check: never, port: any, state: Polling.Compliance}
+    - {check: devices, count: 7}
+symptom: >
+  All devices appear. Compare every other scenario against this one.
+what_to_look_for: >
+  On the timeline, link A trains first (around 12 ms, after the 12 ms
+  Detect.Quiet timer). The switch downstream ports sit in Detect.Quiet
+  (held) until link A reaches L0; then links B and C train. Each link shows
+  three green L0 segments: Gen1, Gen3 and Gen4, separated by short blue
+  Recovery and teal Equalization bars. In the event log, the equalization
+  rows (kind "eq") show one preset trial per phase with a figure of merit
+  above the target. Endpoint EP1 records one Detect cycle: it looked for a
+  receiver at 12 ms while DSP1 was still held in reset.
+what_this_means: >
+  A healthy link goes Detect -> Polling -> Configuration -> L0 at 2.5 GT/s,
+  then uses Recovery to change speed. Equalization runs once per rate (8.0
+  and 16.0 GT/s) and must finish before the link returns to L0 at that rate.
+  Zero flaps, zero equalization failures, and every link at the lower of its
+  two ends' capabilities is what "healthy" looks like.
+likely_root_causes:
+  - "Nothing is wrong. This is the baseline to compare against."
+how_to_debug:
+  - "On a real system, record the same baseline for a known-good board: lspci -vvv LnkCap/LnkSta/LnkSta2 for every port, and the AER counters."
+  - "Keep the baseline next to your test logs; most debugging starts by diffing against it."
+mystery_hints:
+  - "Is any LnkSta value lower than the matching LnkCap value, and can the partner explain it?"
+mystery_cause: "No fault: every link trains to the best rate both ends support."
+quiz: false

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PCIe LTSSM Simulator</title>
+  <meta name="description" content="Replay PCIe link-training scenarios (Gen1 to Gen4) from a behavioral LTSSM model: per-port state timeline, topology, event log, lspci-style summary and learning notes.">
+  <meta name="author" content="Farzana Akhter">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <div class="brand">
+        <h1>PCIe LTSSM Simulator</h1>
+        <p class="tagline">A behavioral model of PCIe link training (Gen1 to Gen4). Pick a scenario and replay it port by port.</p>
+      </div>
+      <nav class="links" aria-label="Project links">
+        <a href="https://github.com/fakhter-uvm014/pcie-ltssm-sim">GitHub repo</a>
+        <a href="https://github.com/fakhter-uvm014/pcie-ltssm-sim/tree/main/docs/guide">Guide</a>
+        <a href="report/" title="pytest-html report, published by the CI workflow">Test report</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div id="load-error" class="notice" role="alert" hidden></div>
+
+    <section class="card scenario-card" aria-labelledby="scenario-title">
+      <div class="scenario-row">
+        <label for="scenario-select" class="field-label">Scenario</label>
+        <select id="scenario-select" aria-label="Scenario"></select>
+        <label class="toggle"><input type="checkbox" id="mystery-toggle"> Mystery mode</label>
+        <span id="result-pill" class="pill" hidden></span>
+      </div>
+      <h2 id="scenario-title">Loading...</h2>
+      <p id="scenario-desc" class="lead"></p>
+      <div id="expected-box" class="expected">
+        <span class="field-label">Expected outcome</span>
+        <p id="scenario-expected"></p>
+      </div>
+      <div id="mystery-box" class="mystery" hidden>
+        <p><strong>Mystery mode.</strong> The title, fault and learning notes are hidden. Use the timeline,
+          event log and status tables to form a hypothesis, then reveal the answer.</p>
+        <button type="button" id="reveal-btn" class="btn">Reveal</button>
+      </div>
+      <p class="run-hint">Run it yourself: <code id="run-cmd">python -m ltssm run S01 --trace</code></p>
+    </section>
+
+    <section class="grid-2">
+      <div class="card">
+        <h3>Topology</h3>
+        <div class="topo-scroll"><svg id="topology" role="img" aria-label="Topology with link states"></svg></div>
+        <p class="hint">Each link shows its state, speed and width at the playhead time. Dashed grey: no link yet.</p>
+      </div>
+      <div class="card replay-card">
+        <h3>Replay</h3>
+        <div class="replay-controls" role="group" aria-label="Replay controls">
+          <button type="button" class="btn" id="btn-restart" title="Back to the start">&laquo; Start</button>
+          <button type="button" class="btn" id="btn-prev" title="Previous state change">&lsaquo; Prev</button>
+          <button type="button" class="btn primary" id="btn-play" title="Play / pause">Play</button>
+          <button type="button" class="btn" id="btn-next" title="Next state change">Next &rsaquo;</button>
+          <button type="button" class="btn" id="btn-end" title="Jump to the end">End &raquo;</button>
+        </div>
+        <label class="slider-row" for="speed">Speed <input type="range" id="speed" min="0" max="4" step="1" value="1"><span id="speed-label">1x</span></label>
+        <label class="slider-row" for="scrub">Event <input type="range" id="scrub" min="0" max="0" step="1" value="0"><span id="scrub-label">0 / 0</span></label>
+        <div id="now-event" class="now-event" aria-live="polite"></div>
+        <h4>Every link at the playhead</h4>
+        <div class="table-scroll"><table class="data link-now" id="link-now"></table></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h3>Timeline</h3>
+        <div class="toolbar" role="group" aria-label="Timeline zoom">
+          <button type="button" class="btn small" id="zoom-out" title="Zoom out">&minus;</button>
+          <input type="range" id="zoom" min="0" max="1000" value="0" aria-label="Zoom level">
+          <button type="button" class="btn small" id="zoom-in" title="Zoom in">+</button>
+          <button type="button" class="btn small" id="zoom-fit" title="Show the whole run">Fit</button>
+          <button type="button" class="btn small" id="zoom-playhead" title="Zoom in around the playhead">Playhead</button>
+        </div>
+      </div>
+      <div id="legend" class="legend"></div>
+      <div class="timeline">
+        <div id="lane-labels" class="lane-labels"></div>
+        <div id="lane-area" class="lane-area"><svg id="lanes" aria-label="Per-port state timeline"></svg></div>
+      </div>
+      <label class="slider-row pan-row" for="pan">Pan <input type="range" id="pan" min="0" max="1000" value="0"></label>
+      <p class="hint">Hover or tap a bar for the substate, reason, speed and width. Ctrl + mouse wheel zooms, drag pans,
+        click a bar to move the playhead.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h3>Event log</h3>
+        <span id="log-count" class="muted"></span>
+      </div>
+      <div class="filters">
+        <label>Port <select id="f-port"><option value="">All ports</option></select></label>
+        <label>State <select id="f-family"><option value="">All states</option></select></label>
+        <label>Kind <select id="f-kind">
+          <option value="">All kinds</option>
+          <option value="state">State changes</option>
+          <option value="status">Status</option>
+          <option value="eq">Equalization trials</option>
+          <option value="fault">Faults</option>
+        </select></label>
+        <label class="grow">Search <input type="search" id="f-text" placeholder="reason, substate, rule (T05)..."></label>
+      </div>
+      <div class="table-scroll log-scroll">
+        <table class="log" id="log">
+          <thead><tr><th>t (ms)</th><th>Port</th><th>Link</th><th>Transition</th><th>Speed</th><th>Width</th><th>Rule</th><th>Reason</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="grid-2 align-start">
+      <div class="card">
+        <div class="card-head"><h3>Summary</h3><span id="summary-pill" class="pill" hidden></span></div>
+        <h4>Final link status per port <span class="muted">(like lspci LnkSta)</span></h4>
+        <div class="table-scroll"><table class="data" id="port-table"></table></div>
+        <h4>Counters per link</h4>
+        <div class="table-scroll"><table class="data" id="counter-table"></table></div>
+        <h4>Enumeration <span class="muted">(model output, lspci -t style)</span></h4>
+        <pre id="enum-tree" class="mono-block"></pre>
+        <h4>Checks against the expected outcome</h4>
+        <ul id="checks" class="checks"></ul>
+      </div>
+      <div class="card">
+        <h3>Learning notes</h3>
+        <div id="notes"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="wrap">Farzana Akhter</div></footer>
+  <div id="tooltip" class="tooltip" role="tooltip" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+report.html
+traces/*.json
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+# the pytest-html report is published by CI only (it contains run timestamps)
+docs/report/
+# docs/traces/*.json is committed on purpose so the viewer works on GitHub
+# Pages without CI.

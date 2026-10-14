@@ -1,0 +1,56 @@
+id: S05
+title: Gen4 equalization failure settles at Gen3
+description: >
+  On link B, equalization at 8.0 GT/s passes, but equalization at 16.0 GT/s
+  cannot pass Phase 3: switch port DSP1 (the requester in Phase 3) cannot
+  find an endpoint transmitter preset that reaches the target. After two
+  failed attempts the link stays at 8.0 GT/s.
+topology: basic
+seed: 1
+duration_ms: 50
+faults:
+  - {type: eq_fail, link: B, rate: Gen4, phase: 3}
+expected:
+  summary: >
+    Link B settles at Gen3 x16: 8 GT/s equalization complete, 16 GT/s
+    equalization failed twice in Phase 3. Links A and C reach Gen4.
+  checks:
+    - {check: link, link: B, state: L0, speed: Gen3, width: x16}
+    - {check: link, link: A, state: L0, speed: Gen4, width: x16}
+    - {check: port, port: DSP1, eq_8gt_complete: true, eq_16gt_complete: false}
+    - {check: sequence, port: DSP1, states: ["L0@Gen3", Recovery.Equalization.Phase3, Recovery.Speed, "L0@Gen3", Recovery.Equalization.Phase3, Recovery.Speed, "L0@Gen3"]}
+    - {check: never, ports: [DSP1, EP1], state: "L0@Gen4"}
+    - {check: counter, link: B, counter: eq_failures.Gen4, op: "==", value: 2}
+    - {check: counter, link: B, counter: eq_failures.Gen3, op: "==", value: 0}
+    - {check: reason, port: DSP1, contains: "rate ceiling lowered to Gen3"}
+    - {check: devices, count: 7}
+symptom: >
+  The accelerator runs at about half the bandwidth it should. Both ends
+  claim 16 GT/s; the link is up and stable.
+what_to_look_for: >
+  Link B reaches L0 at Gen3 normally (one teal block that passes), then two
+  16 GT/s equalization blocks reach Phase 3 and fail: the "eq" rows for
+  DSP1 show every requested EP1 preset rejected. Each failure is followed by
+  Recovery.Speed and a return to L0 at Gen3 (not Gen1: the link reverts to
+  the rate it came from). In lspci view, LnkSta2 (8 GT/s) shows
+  EqualizationComplete+ while the 16 GT/s status shows EquComplete- with
+  Phase1+ Phase2+ Phase3- and LinkEquRequest+.
+what_this_means: >
+  Each rate has its own equalization. Passing at 8 GT/s and failing at
+  16 GT/s is common on channels with marginal loss: 16 GT/s has half the
+  unit interval and much higher loss at its Nyquist frequency. Phase 3 is
+  the upstream direction (endpoint transmitter -> switch receiver).
+likely_root_causes:
+  - "Channel loss acceptable at 8 GT/s but too high at 16 GT/s (trace length, connector, riser, cable)."
+  - "Upstream-direction problem: endpoint transmitter settings or the switch receiver's equalization."
+  - "Missing or misconfigured retimer where the channel needs one at 16 GT/s."
+  - "Board or connector rated for Gen3 only (common with older risers and cables)."
+how_to_debug:
+  - "Look at the 16.0 GT/s Physical Layer capability in lspci -vvv (EquComplete/Phase bits) on both ends."
+  - "Try Target Link Speed = 16 GT/s and Retrain Link on the downstream port; record whether it falls back again and how long it takes."
+  - "Use Lane Margining at the Receiver (16 GT/s feature) to see which lanes and which direction have the least margin."
+  - "Swap riser/cable/slot; test with a shorter channel to confirm loss is the issue."
+mystery_hints:
+  - "Did the link ever equalize successfully? At which rate?"
+  - "Which direction does Phase 3 tune?"
+mystery_cause: "16.0 GT/s equalization fails (Phase 3, upstream direction) while 8.0 GT/s works."

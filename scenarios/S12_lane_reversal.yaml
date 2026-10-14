@@ -1,0 +1,49 @@
+id: S12
+title: Lane reversal
+description: >
+  Point-to-point link wired with lanes in reverse order: root port lane 0
+  connects to endpoint lane 15, lane 1 to lane 14, and so on. During
+  Configuration the endpoint receives lane number 15 on its physical lane 0,
+  recognizes the reversal, and maps its lanes in reverse. The link trains
+  at full width and speed.
+topology: point_to_point
+seed: 1
+duration_ms: 30
+faults:
+  - {type: lane_reversal, link: A}
+expected:
+  summary: >
+    Link A trains at Gen4 x16 with lane reversal applied by the endpoint.
+  checks:
+    - {check: link, link: A, state: L0, speed: Gen4, width: x16}
+    - {check: port, port: EP, lane_reversed: true}
+    - {check: port, port: RP, lane_reversed: false}
+    - {check: reason, port: EP, contains: "lane reversal applied"}
+    - {check: sequence, port: EP, states: [Configuration.Linkwidth.Accept, Configuration.Lanenum.Wait, Configuration.Lanenum.Accept, Configuration.Complete]}
+    - {check: devices, count: 2}
+symptom: >
+  The link works at full speed and width. A board review flagged that the
+  lanes on this connector are routed in reverse order.
+what_to_look_for: >
+  Everything looks like S01 except one status event on EP during
+  Configuration: "lane reversal applied: physical lane 0 carries logical
+  lane 15". The trace detail shows the full lane map. The width is still
+  x16 and no time is lost.
+what_this_means: >
+  Lane numbers are assigned in Configuration. Reversal is allowed so board
+  designers can route lanes without crossing them. It is invisible in
+  normal status registers, which is why it usually only shows up in debug
+  traces. Lane reversal support is optional: if NEITHER side supports it,
+  a reversed link may fail to train or come up narrower (for example x1),
+  which is a classic board bring-up surprise.
+likely_root_causes:
+  - "Intentional board routing (normal)."
+  - "If a reversed link fails to train or trains narrow: neither device supports lane reversal (it is optional), or reversal combined with a missing lane."
+how_to_debug:
+  - "Compare the board schematic lane mapping with the device's lane-reversal support."
+  - "If the link is unexpectedly narrow, check whether lane 0 (or the highest lane, when reversed) is healthy: width negotiation starts there."
+  - "Vendor debug registers often report the logical-to-physical lane map after training."
+mystery_hints:
+  - "Is anything actually wrong with this link?"
+  - "Look at the Configuration substates on the endpoint."
+mystery_cause: "The lanes are wired in reverse order and lane reversal handles it (no performance impact)."

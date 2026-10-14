@@ -1,0 +1,61 @@
+id: S07
+title: Link flapping (periodic errors in L0)
+description: >
+  After link B reaches 16 GT/s, a receiver error is injected every 3 ms (six
+  in total), alternating between the endpoint's and the switch port's
+  receiver. Each error sends the link from L0 into Recovery, which re-locks
+  and returns to L0 at the same speed. The link never goes down, but it
+  keeps stopping traffic for a short time.
+topology: basic
+seed: 1
+duration_ms: 55
+faults:
+  - {type: periodic_l0_errors, link: B, start_ms: 32, period_ms: 3, count: 6}
+expected:
+  summary: >
+    Link B goes L0 -> Recovery -> L0 six times (flap_count = 6), stays at
+    Gen4 x16 and never goes down.
+  checks:
+    - {check: link, link: B, state: L0, speed: Gen4, width: x16}
+    - {check: counter, link: B, counter: flap_count, op: "==", value: 6}
+    - {check: counter, link: B, counter: recovery_causes.error, op: "==", value: 6}
+    - {check: counter, link: B, counter: link_down_count, op: "==", value: 0}
+    - {check: counter, link: B, counter: rx_errors, op: "==", value: 6}
+    - {check: sequence, port: EP1, states: ["L0@Gen4", Recovery.RcvrLock, Recovery.RcvrCfg, Recovery.Idle, "L0@Gen4", Recovery.RcvrLock]}
+    - {check: never, ports: [DSP1, EP1], state: Recovery.Speed@Gen4}
+    - {check: counter, link: A, counter: flap_count, op: "==", value: 0}
+    - {check: devices, count: 7}
+symptom: >
+  The accelerator works at full speed, but throughput has periodic hiccups
+  and the system log shows corrected errors.
+what_to_look_for: >
+  After link B reaches Gen4 (about 26 ms), its swimlanes show narrow blue
+  Recovery bars every 3 ms. The reason on the port that starts each
+  recovery is "receiver error in L0"; the partner follows with "received
+  TS1 while in L0". Each recovery is RcvrLock -> RcvrCfg -> Idle with no
+  Recovery.Speed: the rate does not change. The counters separate the two
+  kinds of recovery: recovery_count includes the two planned speed changes,
+  flap_count counts only error-driven ones.
+what_this_means: >
+  Recovery is the LTSSM's way to re-acquire lock without taking the link
+  down. Occasional recoveries are survivable, but frequent ones cost
+  bandwidth and latency and usually come with correctable errors in AER.
+  A rising flap count is an early warning: the next step on a worse
+  channel is a recovery that fails and a link that goes down (see S14).
+likely_root_causes:
+  - "Marginal signal integrity at the current rate (loss, crosstalk, reflections)."
+  - "Reference clock problems: spread-spectrum clocking used on one side only, or a separate-clock setup without SRIS support."
+  - "Power supply noise or ground bounce coupling into the receiver."
+  - "A marginal retimer, connector or cable that degrades with temperature or vibration."
+  - "Firmware or power-management interactions that force retrains (check ASPM and software retrain activity before blaming SI)."
+how_to_debug:
+  - "Check AER correctable error status and counters (lspci -vvv CESta, /sys/bus/pci/devices/<bdf>/aer_dev_correctable); look for Receiver Error, Bad TLP, Bad DLLP, Replay Timer Timeout."
+  - "Watch dmesg for repeated 'AER: Corrected error received' messages and note the reporting port."
+  - "Do not rely on LnkSta BWMgmt/ABWMgmt: they report bandwidth (speed/width) changes, and same-rate recoveries like these need not set them. The AER correctable counters are the indicator."
+  - "Correlate flap times with workload, temperature and power events."
+  - "Lower the target speed to see whether the errors stop; if they do, the channel lacks margin at the higher rate."
+  - "On the bench: eye/margin measurements per lane and direction, refclk jitter measurement, SSC configuration review."
+mystery_hints:
+  - "Did the link ever go down, or did it only visit Recovery?"
+  - "Did the data rate change during those recoveries?"
+mystery_cause: "Periodic receiver errors in L0 force repeated Recovery (marginal signal integrity)."

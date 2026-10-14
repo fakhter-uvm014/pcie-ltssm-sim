@@ -1,0 +1,1558 @@
+{
+  "format": "pcie-ltssm-sim trace",
+  "format_version": 1,
+  "scenario": {
+    "id": "S12",
+    "title": "Lane reversal",
+    "description": "Point-to-point link wired with lanes in reverse order: root port lane 0 connects to endpoint lane 15, lane 1 to lane 14, and so on. During Configuration the endpoint receives lane number 15 on its physical lane 0, recognizes the reversal, and maps its lanes in reverse. The link trains at full width and speed.",
+    "symptom": "The link works at full speed and width. A board review flagged that the lanes on this connector are routed in reverse order.",
+    "topology": "point_to_point",
+    "faults": [
+      "link A is wired with lanes in reverse order"
+    ],
+    "fault_specs": [
+      {
+        "type": "lane_reversal",
+        "link": "A"
+      }
+    ],
+    "commands": [],
+    "settings": [],
+    "expected": {
+      "summary": "Link A trains at Gen4 x16 with lane reversal applied by the endpoint.",
+      "checks": [
+        {
+          "check": "link",
+          "link": "A",
+          "state": "L0",
+          "speed": "Gen4",
+          "width": "x16"
+        },
+        {
+          "check": "port",
+          "port": "EP",
+          "lane_reversed": true
+        },
+        {
+          "check": "port",
+          "port": "RP",
+          "lane_reversed": false
+        },
+        {
+          "check": "reason",
+          "port": "EP",
+          "contains": "lane reversal applied"
+        },
+        {
+          "check": "sequence",
+          "port": "EP",
+          "states": [
+            "Configuration.Linkwidth.Accept",
+            "Configuration.Lanenum.Wait",
+            "Configuration.Lanenum.Accept",
+            "Configuration.Complete"
+          ]
+        },
+        {
+          "check": "devices",
+          "count": 2
+        }
+      ]
+    },
+    "what_to_look_for": "Everything looks like S01 except one status event on EP during Configuration: \"lane reversal applied: physical lane 0 carries logical lane 15\". The trace detail shows the full lane map. The width is still x16 and no time is lost.",
+    "what_this_means": "Lane numbers are assigned in Configuration. Reversal is allowed so board designers can route lanes without crossing them. It is invisible in normal status registers, which is why it usually only shows up in debug traces. Lane reversal support is optional: if NEITHER side supports it, a reversed link may fail to train or come up narrower (for example x1), which is a classic board bring-up surprise.",
+    "likely_root_causes": [
+      "Intentional board routing (normal).",
+      "If a reversed link fails to train or trains narrow: neither device supports lane reversal (it is optional), or reversal combined with a missing lane."
+    ],
+    "how_to_debug": [
+      "Compare the board schematic lane mapping with the device's lane-reversal support.",
+      "If the link is unexpectedly narrow, check whether lane 0 (or the highest lane, when reversed) is healthy: width negotiation starts there.",
+      "Vendor debug registers often report the logical-to-physical lane map after training."
+    ],
+    "mystery_hints": [
+      "Is anything actually wrong with this link?",
+      "Look at the Configuration substates on the endpoint."
+    ],
+    "mystery_cause": "The lanes are wired in reverse order and lane reversal handles it (no performance impact)."
+  },
+  "topology": {
+    "name": "point_to_point",
+    "description": "One root port connected directly to one Gen4 x16 endpoint.",
+    "devices": [
+      {
+        "id": "RC",
+        "kind": "root_complex",
+        "label": "Root Complex",
+        "ports": [
+          "RP"
+        ]
+      },
+      {
+        "id": "EP",
+        "kind": "endpoint",
+        "label": "Endpoint",
+        "ports": [
+          "EP"
+        ]
+      }
+    ],
+    "ports": [
+      {
+        "name": "RP",
+        "role": "DSP",
+        "kind": "root_port",
+        "device": "RC",
+        "label": "Root Port",
+        "max_speed": "Gen4",
+        "max_width": "x16",
+        "link": "A"
+      },
+      {
+        "name": "EP",
+        "role": "USP",
+        "kind": "endpoint",
+        "device": "EP",
+        "label": "Endpoint",
+        "max_speed": "Gen4",
+        "max_width": "x16",
+        "link": "A"
+      }
+    ],
+    "links": [
+      {
+        "name": "A",
+        "dsp": "RP",
+        "usp": "EP",
+        "lanes": 16
+      }
+    ]
+  },
+  "seed": 1,
+  "duration_ns": 30000000,
+  "config": {
+    "os_per_burst": 32,
+    "burst_batch_after": 16,
+    "burst_batch_factor": 8,
+    "link_delay_ns": 10,
+    "rx_consecutive_required": 8,
+    "rx_consecutive_short": 2,
+    "detect_quiet_ns": 12000000,
+    "detect_active_ns": 1000,
+    "polling_active_ns": 24000000,
+    "polling_active_min_ts1_tx": 1024,
+    "polling_configuration_ns": 48000000,
+    "polling_cfg_min_ts2_tx_after_rx": 16,
+    "silent_partner_to_polling_compliance": true,
+    "cfg_linkwidth_start_ns": 24000000,
+    "cfg_substate_timeout_ns": 2000000,
+    "cfg_complete_min_ts2_tx_after_rx": 16,
+    "idle_min_tx_after_rx": 16,
+    "dl_active_delay_ns": 5000,
+    "l0_idle_bursts": 4,
+    "speed_change_delay_ns": 20000,
+    "l0_error_check_ns": 50000,
+    "recovery_rcvrlock_ns": 2000000,
+    "recovery_rcvrcfg_ns": 2000000,
+    "recovery_idle_ns": 2000000,
+    "recovery_speed_ei_ns": 2000,
+    "rcvrcfg_min_ts2_tx_after_rx": 16,
+    "gen2_step": false,
+    "eq_max_attempts": 2,
+    "eq_phase01_timeout_ns": 12000000,
+    "eq_phase23_timeout_ns": 24000000,
+    "eq_preset_eval_ns": 400000,
+    "eq_max_presets_per_phase": 6,
+    "eq_fom_target": 60,
+    "eq_search_order": [
+      "P7",
+      "P8",
+      "P6",
+      "P5",
+      "P9",
+      "P4",
+      "P3",
+      "P2",
+      "P1",
+      "P0",
+      "P10"
+    ],
+    "hot_reset_ns": 2000000,
+    "loopback_exit_ns": 2000,
+    "disabled_ts1_bursts": 4,
+    "aspm_l1": false,
+    "aspm_l1_idle_ns": 2000000,
+    "aspm_l1_cycles": 2,
+    "l1_entry_settle_ns": 2000,
+    "l1_residency_ns": 3000000,
+    "aspm_l0s": false,
+    "aspm_l0s_idle_ns": 1000000,
+    "l0s_residency_ns": 200000,
+    "n_fts": 64,
+    "dsp_start": "wait_for_upstream",
+    "duration_ns": 30000000
+  },
+  "stats": {
+    "events": 83,
+    "state_events": 68,
+    "engine_events": 2837
+  },
+  "events": [
+    {
+      "t_ns": 0,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Reset",
+      "to": "Detect.Quiet",
+      "reason": "fundamental reset released (PERST# deasserted): LTSSM starts in Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "init"
+    },
+    {
+      "t_ns": 0,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Reset",
+      "to": "Detect.Quiet",
+      "reason": "fundamental reset released (PERST# deasserted): LTSSM starts in Detect.Quiet",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "init"
+    },
+    {
+      "t_ns": 12000000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 12000000,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Detect.Quiet",
+      "to": "Detect.Active",
+      "reason": "Detect.Quiet timer expired (12.000 ms)",
+      "speed": "Gen1",
+      "width": "x0",
+      "rule": "T01"
+    },
+    {
+      "t_ns": 12001000,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Polling.Active",
+      "reason": "receiver termination detected on lanes 0-15 (16 of 16)",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T03",
+      "detail": {
+        "lanes_detected": "0-15"
+      }
+    },
+    {
+      "t_ns": 12001000,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Detect.Active",
+      "to": "Polling.Active",
+      "reason": "receiver termination detected on lanes 0-15 (16 of 16)",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T03",
+      "detail": {
+        "lanes_detected": "0-15"
+      }
+    },
+    {
+      "t_ns": 12064488,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Polling.Active",
+      "to": "Polling.Configuration",
+      "reason": "sent 1024 TS1 (>= 1024); received 8 consecutive TS1/TS2 on all 16 lanes",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T05"
+    },
+    {
+      "t_ns": 12064488,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Polling.Active",
+      "to": "Polling.Configuration",
+      "reason": "sent 1024 TS1 (>= 1024); received 8 consecutive TS1/TS2 on all 16 lanes",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T05"
+    },
+    {
+      "t_ns": 12066536,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Polling.Configuration",
+      "to": "Configuration.Linkwidth.Start",
+      "reason": "received 8 consecutive TS2 on all 16 lanes; sent 32 TS2 after the first one",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T10"
+    },
+    {
+      "t_ns": 12066536,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Polling.Configuration",
+      "to": "Configuration.Linkwidth.Start",
+      "reason": "received 8 consecutive TS2 on all 16 lanes; sent 32 TS2 after the first one",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T10"
+    },
+    {
+      "t_ns": 12066546,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Configuration.Linkwidth.Start",
+      "to": "Configuration.Linkwidth.Accept",
+      "reason": "received 2 TS1 with link number 1 on lanes 0-15",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T13"
+    },
+    {
+      "t_ns": 12066556,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Configuration.Linkwidth.Start",
+      "to": "Configuration.Linkwidth.Accept",
+      "reason": "link number 1 echoed by the partner on lanes 0-15",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T12"
+    },
+    {
+      "t_ns": 12068604,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Configuration.Linkwidth.Accept",
+      "to": "Configuration.Lanenum.Wait",
+      "reason": "link number echoed on lanes 0-15; width x16 selected (widest supported width starting at lane 0)",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T15",
+      "detail": {
+        "width": "x16",
+        "lanes_echoed": "0-15"
+      }
+    },
+    {
+      "t_ns": 12068614,
+      "kind": "status",
+      "port": "EP",
+      "link": "A",
+      "from": "Configuration.Linkwidth.Accept",
+      "to": "Configuration.Linkwidth.Accept",
+      "reason": "lane reversal applied: physical lane 0 carries logical lane 15",
+      "speed": "Gen1",
+      "width": "x16",
+      "detail": {
+        "lane_reversal": true,
+        "lane_map": {
+          "0": 15,
+          "1": 14,
+          "2": 13,
+          "3": 12,
+          "4": 11,
+          "5": 10,
+          "6": 9,
+          "7": 8,
+          "8": 7,
+          "9": 6,
+          "10": 5,
+          "11": 4,
+          "12": 3,
+          "13": 2,
+          "14": 1,
+          "15": 0
+        }
+      }
+    },
+    {
+      "t_ns": 12068614,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Configuration.Linkwidth.Accept",
+      "to": "Configuration.Lanenum.Wait",
+      "reason": "received lane numbers on lanes 0-15",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T16"
+    },
+    {
+      "t_ns": 12068624,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Configuration.Lanenum.Wait",
+      "to": "Configuration.Lanenum.Accept",
+      "reason": "partner echoes lane numbers on all 16 lanes",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T17"
+    },
+    {
+      "t_ns": 12068634,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Configuration.Lanenum.Wait",
+      "to": "Configuration.Lanenum.Accept",
+      "reason": "lane numbers stable on all 16 lanes",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T18"
+    },
+    {
+      "t_ns": 12068644,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Configuration.Lanenum.Accept",
+      "to": "Configuration.Complete",
+      "reason": "echoed lane numbers match the proposal on all 16 lanes (x16)",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T19"
+    },
+    {
+      "t_ns": 12068654,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Configuration.Lanenum.Accept",
+      "to": "Configuration.Complete",
+      "reason": "received 2 consecutive TS2 on all 16 lanes",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T20"
+    },
+    {
+      "t_ns": 12070692,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Configuration.Complete",
+      "to": "Configuration.Idle",
+      "reason": "received 8 consecutive TS2 and sent 32 after the first; partner advertises up to Gen4 (16.0 GT/s)",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T21"
+    },
+    {
+      "t_ns": 12072750,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Configuration.Complete",
+      "to": "Configuration.Idle",
+      "reason": "received 8 consecutive TS2 and sent 32 after the first; partner advertises up to Gen4 (16.0 GT/s)",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T21"
+    },
+    {
+      "t_ns": 12074788,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Configuration.Idle",
+      "to": "L0",
+      "reason": "received 8 consecutive Idle symbols and sent 32 after the first: link up at Gen1 (2.5 GT/s) x16",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T22"
+    },
+    {
+      "t_ns": 12074798,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Configuration.Idle",
+      "to": "L0",
+      "reason": "received 8 consecutive Idle symbols and sent 32 after the first: link up at Gen1 (2.5 GT/s) x16",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T22"
+    },
+    {
+      "t_ns": 12079788,
+      "kind": "status",
+      "port": "RP",
+      "link": "A",
+      "from": "L0",
+      "to": "L0",
+      "reason": "DL_Link_Active: data link layer initialized (timed flag in this model)",
+      "speed": "Gen1",
+      "width": "x16",
+      "detail": {
+        "flags": {
+          "dl_link_active": true
+        }
+      }
+    },
+    {
+      "t_ns": 12079798,
+      "kind": "status",
+      "port": "EP",
+      "link": "A",
+      "from": "L0",
+      "to": "L0",
+      "reason": "DL_Link_Active: data link layer initialized (timed flag in this model)",
+      "speed": "Gen1",
+      "width": "x16",
+      "detail": {
+        "flags": {
+          "dl_link_active": true
+        }
+      }
+    },
+    {
+      "t_ns": 12094788,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "L0",
+      "to": "Recovery.RcvrLock",
+      "reason": "speed change Gen1 -> Gen3 (8.0 GT/s): 8.0 GT/s first, because 8 GT/s equalization must complete before 16 GT/s is tried; link target is Gen4 because both ends support Gen4",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T30"
+    },
+    {
+      "t_ns": 12094798,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "L0",
+      "to": "Recovery.RcvrLock",
+      "reason": "received TS1 while in L0: the partner entered Recovery to change speed",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T29"
+    },
+    {
+      "t_ns": 12094808,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.RcvrCfg",
+      "reason": "received 8 consecutive TS1/TS2 on all 16 lanes at Gen1 with speed_change=1",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T44"
+    },
+    {
+      "t_ns": 12094818,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.RcvrCfg",
+      "reason": "received 8 consecutive TS1/TS2 on all 16 lanes at Gen1 with speed_change=1",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T44"
+    },
+    {
+      "t_ns": 12096856,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrCfg",
+      "to": "Recovery.Speed",
+      "reason": "received 8 TS2 with speed_change=1 on all 16 lanes; highest common advertised rate is Gen3 (8.0 GT/s)",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T53"
+    },
+    {
+      "t_ns": 12098856,
+      "kind": "status",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Speed",
+      "to": "Recovery.Speed",
+      "reason": "data rate switched: Gen1 (2.5 GT/s) -> Gen3 (8.0 GT/s)",
+      "speed": "Gen3",
+      "width": "x16",
+      "detail": {
+        "rate_from": "Gen1",
+        "rate_to": "Gen3"
+      }
+    },
+    {
+      "t_ns": 12098856,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Speed",
+      "to": "Recovery.RcvrLock",
+      "reason": "electrical idle done; switching Gen1 -> Gen3 (8.0 GT/s)",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T56"
+    },
+    {
+      "t_ns": 12098856,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.Equalization.Phase1",
+      "reason": "now at 8.0 GT/s without equalization at this rate: equalization starts in Phase 1 (Phase 0 is the USP's)",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T43"
+    },
+    {
+      "t_ns": 12098914,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrCfg",
+      "to": "Recovery.Speed",
+      "reason": "received 8 TS2 with speed_change=1 on all 16 lanes; highest common advertised rate is Gen3 (8.0 GT/s)",
+      "speed": "Gen1",
+      "width": "x16",
+      "rule": "T53"
+    },
+    {
+      "t_ns": 12100914,
+      "kind": "status",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Speed",
+      "to": "Recovery.Speed",
+      "reason": "data rate switched: Gen1 (2.5 GT/s) -> Gen3 (8.0 GT/s)",
+      "speed": "Gen3",
+      "width": "x16",
+      "detail": {
+        "rate_from": "Gen1",
+        "rate_to": "Gen3"
+      }
+    },
+    {
+      "t_ns": 12100914,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Speed",
+      "to": "Recovery.RcvrLock",
+      "reason": "electrical idle done; switching Gen1 -> Gen3 (8.0 GT/s)",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T56"
+    },
+    {
+      "t_ns": 12100914,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.Equalization.Phase0",
+      "reason": "now at 8.0 GT/s without equalization at this rate: equalization starts in Phase 0",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T42"
+    },
+    {
+      "t_ns": 12100946,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase0",
+      "to": "Recovery.Equalization.Phase1",
+      "reason": "received 2 TS1 with EC=01 on all 16 lanes: partner is in Phase 1",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T58"
+    },
+    {
+      "t_ns": 12100956,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase1",
+      "to": "Recovery.Equalization.Phase2",
+      "reason": "received 2 TS1 with EC=01 on all 16 lanes: partner is in Phase 1",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T59"
+    },
+    {
+      "t_ns": 12100966,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase1",
+      "to": "Recovery.Equalization.Phase2",
+      "reason": "received 2 TS1 with EC=10 on all 16 lanes: the DSP is in Phase 2",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T60"
+    },
+    {
+      "t_ns": 12500966,
+      "kind": "eq",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase2",
+      "to": "Recovery.Equalization.Phase2",
+      "reason": "Phase 2: RP TX preset P7 -> FOM 82 >= target 60: accepted",
+      "speed": "Gen3",
+      "width": "x16",
+      "detail": {
+        "phase": 2,
+        "preset": "P7",
+        "fom": 82,
+        "target": 60,
+        "accepted": true
+      }
+    },
+    {
+      "t_ns": 12500966,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase2",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "Phase 2 done (downstream direction: DSP TX -> USP RX): RP TX preset P7 gives FOM 82 >= 60 after 1 trial(s)",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T61",
+      "detail": {
+        "phase": 2,
+        "trials": [
+          {
+            "preset": "P7",
+            "fom": 82,
+            "accepted": true
+          }
+        ]
+      }
+    },
+    {
+      "t_ns": 12500976,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase2",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "received 2 TS1 with EC=11 on all 16 lanes: the USP finished Phase 2",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T63"
+    },
+    {
+      "t_ns": 12900976,
+      "kind": "eq",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "Phase 3: EP TX preset P7 -> FOM 81 >= target 60: accepted",
+      "speed": "Gen3",
+      "width": "x16",
+      "detail": {
+        "phase": 3,
+        "preset": "P7",
+        "fom": 81,
+        "target": 60,
+        "accepted": true
+      }
+    },
+    {
+      "t_ns": 12900976,
+      "kind": "status",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "Equalization 8.0 GT/s Complete+ (Phase1+ Phase2+ Phase3+)",
+      "speed": "Gen3",
+      "width": "x16",
+      "detail": {
+        "flags": {
+          "eq_8gt_complete": true
+        }
+      }
+    },
+    {
+      "t_ns": 12900976,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.RcvrLock",
+      "reason": "Phase 3 done (upstream direction: USP TX -> DSP RX): EP TX preset P7 gives FOM 81 >= 60 after 1 trial(s)",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T64",
+      "detail": {
+        "phase": 3,
+        "trials": [
+          {
+            "preset": "P7",
+            "fom": 81,
+            "accepted": true
+          }
+        ]
+      }
+    },
+    {
+      "t_ns": 12900986,
+      "kind": "status",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "Equalization 8.0 GT/s Complete+ (Phase1+ Phase2+ Phase3+)",
+      "speed": "Gen3",
+      "width": "x16",
+      "detail": {
+        "flags": {
+          "eq_8gt_complete": true
+        }
+      }
+    },
+    {
+      "t_ns": 12900986,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.RcvrLock",
+      "reason": "received 2 TS1 with EC=00 on all 16 lanes: the DSP finished Phase 3",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T66"
+    },
+    {
+      "t_ns": 12900996,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.RcvrCfg",
+      "reason": "received 8 consecutive TS1/TS2 on all 16 lanes at Gen3",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T44"
+    },
+    {
+      "t_ns": 12901006,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.RcvrCfg",
+      "reason": "received 8 consecutive TS1/TS2 on all 16 lanes at Gen3",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T44"
+    },
+    {
+      "t_ns": 12901516,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrCfg",
+      "to": "Recovery.Idle",
+      "reason": "received 8 consecutive TS2 on all 16 lanes",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T54"
+    },
+    {
+      "t_ns": 12902046,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrCfg",
+      "to": "Recovery.Idle",
+      "reason": "received 8 consecutive TS2 on all 16 lanes",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T54"
+    },
+    {
+      "t_ns": 12902556,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Idle",
+      "to": "L0",
+      "reason": "received 8 consecutive Idle symbols and sent 32 after the first: link up at Gen3 (8.0 GT/s) x16",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T70"
+    },
+    {
+      "t_ns": 12902566,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Idle",
+      "to": "L0",
+      "reason": "received 8 consecutive Idle symbols and sent 32 after the first: link up at Gen3 (8.0 GT/s) x16",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T70"
+    },
+    {
+      "t_ns": 12922556,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "L0",
+      "to": "Recovery.RcvrLock",
+      "reason": "speed change Gen3 -> Gen4 (16.0 GT/s): straight to the highest allowed rate; link target is Gen4 because both ends support Gen4",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T30"
+    },
+    {
+      "t_ns": 12922566,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "L0",
+      "to": "Recovery.RcvrLock",
+      "reason": "received TS1 while in L0: the partner entered Recovery to change speed",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T29"
+    },
+    {
+      "t_ns": 12922576,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.RcvrCfg",
+      "reason": "received 8 consecutive TS1/TS2 on all 16 lanes at Gen3 with speed_change=1",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T44"
+    },
+    {
+      "t_ns": 12922586,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.RcvrCfg",
+      "reason": "received 8 consecutive TS1/TS2 on all 16 lanes at Gen3 with speed_change=1",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T44"
+    },
+    {
+      "t_ns": 12923096,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrCfg",
+      "to": "Recovery.Speed",
+      "reason": "received 8 TS2 with speed_change=1 on all 16 lanes; highest common advertised rate is Gen4 (16.0 GT/s)",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T53"
+    },
+    {
+      "t_ns": 12923626,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrCfg",
+      "to": "Recovery.Speed",
+      "reason": "received 8 TS2 with speed_change=1 on all 16 lanes; highest common advertised rate is Gen4 (16.0 GT/s)",
+      "speed": "Gen3",
+      "width": "x16",
+      "rule": "T53"
+    },
+    {
+      "t_ns": 12925096,
+      "kind": "status",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Speed",
+      "to": "Recovery.Speed",
+      "reason": "data rate switched: Gen3 (8.0 GT/s) -> Gen4 (16.0 GT/s)",
+      "speed": "Gen4",
+      "width": "x16",
+      "detail": {
+        "rate_from": "Gen3",
+        "rate_to": "Gen4"
+      }
+    },
+    {
+      "t_ns": 12925096,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Speed",
+      "to": "Recovery.RcvrLock",
+      "reason": "electrical idle done; switching Gen3 -> Gen4 (16.0 GT/s)",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T56"
+    },
+    {
+      "t_ns": 12925096,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.Equalization.Phase1",
+      "reason": "now at 16.0 GT/s without equalization at this rate: equalization starts in Phase 1 (Phase 0 is the USP's)",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T43"
+    },
+    {
+      "t_ns": 12925626,
+      "kind": "status",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Speed",
+      "to": "Recovery.Speed",
+      "reason": "data rate switched: Gen3 (8.0 GT/s) -> Gen4 (16.0 GT/s)",
+      "speed": "Gen4",
+      "width": "x16",
+      "detail": {
+        "rate_from": "Gen3",
+        "rate_to": "Gen4"
+      }
+    },
+    {
+      "t_ns": 12925626,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Speed",
+      "to": "Recovery.RcvrLock",
+      "reason": "electrical idle done; switching Gen3 -> Gen4 (16.0 GT/s)",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T56"
+    },
+    {
+      "t_ns": 12925626,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.Equalization.Phase0",
+      "reason": "now at 16.0 GT/s without equalization at this rate: equalization starts in Phase 0",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T42"
+    },
+    {
+      "t_ns": 12925626,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase0",
+      "to": "Recovery.Equalization.Phase1",
+      "reason": "received 2 TS1 with EC=01 on all 16 lanes: partner is in Phase 1",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T58"
+    },
+    {
+      "t_ns": 12925636,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase1",
+      "to": "Recovery.Equalization.Phase2",
+      "reason": "received 2 TS1 with EC=01 on all 16 lanes: partner is in Phase 1",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T59"
+    },
+    {
+      "t_ns": 12925646,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase1",
+      "to": "Recovery.Equalization.Phase2",
+      "reason": "received 2 TS1 with EC=10 on all 16 lanes: the DSP is in Phase 2",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T60"
+    },
+    {
+      "t_ns": 13325646,
+      "kind": "eq",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase2",
+      "to": "Recovery.Equalization.Phase2",
+      "reason": "Phase 2: RP TX preset P7 -> FOM 66 >= target 60: accepted",
+      "speed": "Gen4",
+      "width": "x16",
+      "detail": {
+        "phase": 2,
+        "preset": "P7",
+        "fom": 66,
+        "target": 60,
+        "accepted": true
+      }
+    },
+    {
+      "t_ns": 13325646,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase2",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "Phase 2 done (downstream direction: DSP TX -> USP RX): RP TX preset P7 gives FOM 66 >= 60 after 1 trial(s)",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T61",
+      "detail": {
+        "phase": 2,
+        "trials": [
+          {
+            "preset": "P7",
+            "fom": 66,
+            "accepted": true
+          }
+        ]
+      }
+    },
+    {
+      "t_ns": 13325656,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase2",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "received 2 TS1 with EC=11 on all 16 lanes: the USP finished Phase 2",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T63"
+    },
+    {
+      "t_ns": 13725656,
+      "kind": "eq",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "Phase 3: EP TX preset P7 -> FOM 65 >= target 60: accepted",
+      "speed": "Gen4",
+      "width": "x16",
+      "detail": {
+        "phase": 3,
+        "preset": "P7",
+        "fom": 65,
+        "target": 60,
+        "accepted": true
+      }
+    },
+    {
+      "t_ns": 13725656,
+      "kind": "status",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "Equalization 16.0 GT/s Complete+ (Phase1+ Phase2+ Phase3+)",
+      "speed": "Gen4",
+      "width": "x16",
+      "detail": {
+        "flags": {
+          "eq_16gt_complete": true
+        }
+      }
+    },
+    {
+      "t_ns": 13725656,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.RcvrLock",
+      "reason": "Phase 3 done (upstream direction: USP TX -> DSP RX): EP TX preset P7 gives FOM 65 >= 60 after 1 trial(s)",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T64",
+      "detail": {
+        "phase": 3,
+        "trials": [
+          {
+            "preset": "P7",
+            "fom": 65,
+            "accepted": true
+          }
+        ]
+      }
+    },
+    {
+      "t_ns": 13725666,
+      "kind": "status",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.Equalization.Phase3",
+      "reason": "Equalization 16.0 GT/s Complete+ (Phase1+ Phase2+ Phase3+)",
+      "speed": "Gen4",
+      "width": "x16",
+      "detail": {
+        "flags": {
+          "eq_16gt_complete": true
+        }
+      }
+    },
+    {
+      "t_ns": 13725666,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Equalization.Phase3",
+      "to": "Recovery.RcvrLock",
+      "reason": "received 2 TS1 with EC=00 on all 16 lanes: the DSP finished Phase 3",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T66"
+    },
+    {
+      "t_ns": 13725676,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.RcvrCfg",
+      "reason": "received 8 consecutive TS1/TS2 on all 16 lanes at Gen4",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T44"
+    },
+    {
+      "t_ns": 13725686,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrLock",
+      "to": "Recovery.RcvrCfg",
+      "reason": "received 8 consecutive TS1/TS2 on all 16 lanes at Gen4",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T44"
+    },
+    {
+      "t_ns": 13725936,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.RcvrCfg",
+      "to": "Recovery.Idle",
+      "reason": "received 8 consecutive TS2 on all 16 lanes",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T54"
+    },
+    {
+      "t_ns": 13726206,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.RcvrCfg",
+      "to": "Recovery.Idle",
+      "reason": "received 8 consecutive TS2 on all 16 lanes",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T54"
+    },
+    {
+      "t_ns": 13726456,
+      "kind": "state",
+      "port": "RP",
+      "link": "A",
+      "from": "Recovery.Idle",
+      "to": "L0",
+      "reason": "received 8 consecutive Idle symbols and sent 32 after the first: link up at Gen4 (16.0 GT/s) x16",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T70"
+    },
+    {
+      "t_ns": 13726466,
+      "kind": "state",
+      "port": "EP",
+      "link": "A",
+      "from": "Recovery.Idle",
+      "to": "L0",
+      "reason": "received 8 consecutive Idle symbols and sent 32 after the first: link up at Gen4 (16.0 GT/s) x16",
+      "speed": "Gen4",
+      "width": "x16",
+      "rule": "T70"
+    }
+  ],
+  "links": {
+    "A": {
+      "name": "A",
+      "dsp": "RP",
+      "usp": "EP",
+      "physical_lanes": 16,
+      "state": "L0",
+      "speed": "Gen4",
+      "width": "x16",
+      "up": true,
+      "dl_link_active": true,
+      "lane_reversal": true,
+      "faults": [
+        "lanes wired in reverse order"
+      ],
+      "counters": {
+        "time_to_l0_ns": 12074798,
+        "time_to_final_speed_ns": 13726466,
+        "recovery_count": 2,
+        "flap_count": 0,
+        "recovery_causes": {
+          "speed change": 2
+        },
+        "speed_changes": 2,
+        "detect_cycles": 0,
+        "link_down_count": 0,
+        "l1_entries": 0,
+        "rx_errors": 0,
+        "eq_attempts": {
+          "Gen3": 1,
+          "Gen4": 1
+        },
+        "eq_failures": {
+          "Gen3": 0,
+          "Gen4": 0
+        }
+      }
+    }
+  },
+  "ports": {
+    "RP": {
+      "name": "RP",
+      "role": "DSP",
+      "device": "RC",
+      "label": "Root Port",
+      "link": "A",
+      "state": "L0",
+      "speed": "Gen4",
+      "width": "x16",
+      "link_training": false,
+      "dl_link_active": true,
+      "max_speed": "Gen4",
+      "max_width": "x16",
+      "target_link_speed": "Gen4",
+      "lane_reversed": false,
+      "eq_8gt_complete": true,
+      "eq_16gt_complete": true,
+      "eq": {
+        "Gen3": {
+          "complete": true,
+          "phase1": true,
+          "phase2": true,
+          "phase3": true,
+          "link_eq_request": false
+        },
+        "Gen4": {
+          "complete": true,
+          "phase1": true,
+          "phase2": true,
+          "phase3": true,
+          "link_eq_request": false
+        }
+      },
+      "eq_presets": {
+        "Gen3.phase3": "P7",
+        "Gen4.phase3": "P7"
+      },
+      "rate_ceiling": "Gen4",
+      "rx_errors": 0,
+      "detect_cycles": 0,
+      "held": false,
+      "aspm_l1": false
+    },
+    "EP": {
+      "name": "EP",
+      "role": "USP",
+      "device": "EP",
+      "label": "Endpoint",
+      "link": "A",
+      "state": "L0",
+      "speed": "Gen4",
+      "width": "x16",
+      "link_training": false,
+      "dl_link_active": true,
+      "max_speed": "Gen4",
+      "max_width": "x16",
+      "target_link_speed": "Gen4",
+      "lane_reversed": true,
+      "eq_8gt_complete": true,
+      "eq_16gt_complete": true,
+      "eq": {
+        "Gen3": {
+          "complete": true,
+          "phase1": true,
+          "phase2": true,
+          "phase3": true,
+          "link_eq_request": false
+        },
+        "Gen4": {
+          "complete": true,
+          "phase1": true,
+          "phase2": true,
+          "phase3": true,
+          "link_eq_request": false
+        }
+      },
+      "eq_presets": {
+        "Gen3.phase2": "P7",
+        "Gen4.phase2": "P7"
+      },
+      "rate_ceiling": "Gen4",
+      "rx_errors": 0,
+      "detect_cycles": 0,
+      "held": false,
+      "aspm_l1": false
+    }
+  },
+  "enumeration": {
+    "device_count": 2,
+    "functions": [
+      {
+        "bdf": "00:01.0",
+        "bus": 0,
+        "dev": 1,
+        "fn": 0,
+        "port": "RP",
+        "kind": "root_port",
+        "header": "Type 1",
+        "name": "Root Port",
+        "vendor_id": "0x1234",
+        "device_id": "0x7001",
+        "parent": null,
+        "primary": 0,
+        "secondary": 1,
+        "subordinate": 1,
+        "children": [
+          "01:00.0"
+        ]
+      },
+      {
+        "bdf": "01:00.0",
+        "bus": 1,
+        "dev": 0,
+        "fn": 0,
+        "port": "EP",
+        "kind": "endpoint",
+        "header": "Type 0",
+        "name": "Endpoint",
+        "vendor_id": "0x1234",
+        "device_id": "0x7201",
+        "parent": "00:01.0",
+        "primary": null,
+        "secondary": null,
+        "subordinate": null,
+        "children": []
+      }
+    ],
+    "missing": [],
+    "lspci_t": "-[0000:00]---01.0-[01]----00.0"
+  },
+  "result": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "link A ends in L0 Gen4 x16",
+        "passed": true,
+        "detail": "actual: L0 Gen4 x16 (up)"
+      },
+      {
+        "name": "port EP lane_reversed=True",
+        "passed": true,
+        "detail": "actual: lane_reversed=True"
+      },
+      {
+        "name": "port RP lane_reversed=False",
+        "passed": true,
+        "detail": "actual: lane_reversed=False"
+      },
+      {
+        "name": "EP trace mentions 'lane reversal applied'",
+        "passed": true,
+        "detail": "t=12068614 ns: lane reversal applied: physical lane 0 carries logical lane 15"
+      },
+      {
+        "name": "EP goes through Configuration.Linkwidth.Accept -> Configuration.Lanenum.Wait -> Configuration.Lanenum.Accept -> Configuration.Complete",
+        "passed": true,
+        "detail": "seen in order, last at t=12068654 ns"
+      },
+      {
+        "name": "enumeration finds 2 functions",
+        "passed": true,
+        "detail": "actual: 2 functions (EP, RP)"
+      },
+      {
+        "name": "invariant: no L0 at 8.0 GT/s without 8 GT/s equalization complete",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "invariant: no L0 at 16.0 GT/s without 16 GT/s equalization complete",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "invariant: 16.0 GT/s never attempted before 8 GT/s equalization is complete",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "invariant: every transition matches a row of the transition table",
+        "passed": true,
+        "detail": "ok"
+      },
+      {
+        "name": "invariant: event times never go backwards",
+        "passed": true,
+        "detail": "ok"
+      }
+    ]
+  }
+}

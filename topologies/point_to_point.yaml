@@ -1,0 +1,30 @@
+# The smallest useful topology: one root port wired straight to one endpoint.
+#
+#   Root Port (RP) -- link A (x16) -- EP (Gen4 x16)
+#
+# Vendor/Device IDs are placeholders for the model, not real products.
+name: point_to_point
+description: One root port connected directly to one Gen4 x16 endpoint.
+devices:
+  - id: RC
+    kind: root_complex
+    label: Root Complex
+    vendor_id: 0x1234
+    device_id: 0x7001
+    ports:
+      - name: RP
+        label: Root Port
+        device_number: 1
+        max_speed: Gen4
+        max_width: x16
+  - id: EP
+    kind: endpoint
+    label: Endpoint
+    vendor_id: 0x1234
+    device_id: 0x7201
+    port:
+      name: EP
+      max_speed: Gen4
+      max_width: x16
+links:
+  - {name: A, dsp: RP, usp: EP, note: "direct attach"}

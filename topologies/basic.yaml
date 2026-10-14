@@ -1,0 +1,70 @@
+# Root port -> switch -> two endpoints and one empty slot.
+#
+#   Root Port (RP)
+#      | link A (x16)
+#   Switch Upstream Port (USP)
+#      +-- DSP1 -- link B (x16) -- EP1  accelerator card, Gen4 x16
+#      +-- DSP2 -- link C (x4)  -- EP2  NVMe SSD, Gen4 x4 in an x8 slot
+#      +-- DSP3 -- link D       -- (empty slot)
+#
+# Vendor/Device IDs are placeholders for the model, not real products.
+name: basic
+description: Root port, a switch with three downstream ports, two endpoints and one empty slot.
+devices:
+  - id: RC
+    kind: root_complex
+    label: Root Complex
+    vendor_id: 0x1234
+    device_id: 0x7001
+    ports:
+      - name: RP
+        label: Root Port
+        device_number: 1
+        max_speed: Gen4
+        max_width: x16
+  - id: SW
+    kind: switch
+    label: Switch
+    vendor_id: 0x1234
+    device_id: 0x7100
+    upstream:
+      name: USP
+      label: Switch Upstream Port
+      max_speed: Gen4
+      max_width: x16
+    downstream:
+      - name: DSP1
+        label: Switch Downstream Port 1
+        max_speed: Gen4
+        max_width: x16
+      - name: DSP2
+        label: Switch Downstream Port 2
+        max_speed: Gen4
+        max_width: x8
+      - name: DSP3
+        label: Switch Downstream Port 3
+        max_speed: Gen4
+        max_width: x8
+  - id: EP1
+    kind: endpoint
+    label: Accelerator
+    vendor_id: 0x1234
+    device_id: 0x7201
+    port:
+      name: EP1
+      max_speed: Gen4
+      max_width: x16
+  - id: EP2
+    kind: endpoint
+    label: NVMe SSD
+    vendor_id: 0x1234
+    device_id: 0x7202
+    port:
+      name: EP2
+      max_speed: Gen4
+      max_width: x4
+links:
+  - {name: A, dsp: RP, usp: USP, note: "root port to switch"}
+  - {name: B, dsp: DSP1, usp: EP1, note: "slot 1"}
+  - {name: C, dsp: DSP2, usp: EP2, note: "slot 2 (x8 slot, x4 card)"}
+  - {name: D, dsp: DSP3, usp: null, note: "slot 3 (empty)"}

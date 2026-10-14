@@ -1,0 +1,149 @@
+{
+  "format": "pcie-ltssm-sim trace index",
+  "scenarios": [
+    {
+      "id": "S01",
+      "title": "Clean Gen4 bring-up",
+      "file": "S01.json",
+      "topology": "basic",
+      "description": "No faults. The root port trains link A to the switch, the switch releases its downstream ports, and every populated link trains at 2.5 GT/s first, then steps to 8.0 GT/s (with equalization) and 16.0 GT/s (with equalization). Slot 3 is empty, so link D keeps looking for a receiver. Use this run as the healthy reference for every other scenario.",
+      "expected": "Links A and B reach L0 at Gen4 x16, link C at Gen4 x4 (the NVMe SSD is an x4 device in an x8 slot), link D stays in Detect (empty slot), and enumeration finds 7 functions.",
+      "passed": true
+    },
+    {
+      "id": "S02",
+      "title": "Mixed capability (Gen2-only endpoint)",
+      "file": "S02.json",
+      "topology": "basic",
+      "description": "Endpoint 2 only supports 5.0 GT/s (Gen2). Its TS1/TS2 ordered sets advertise rates up to Gen2, so the switch downstream port DSP2 never asks for 8 or 16 GT/s on link C. The other links are unaffected.",
+      "expected": "Link C trains at Gen2 x4 with no equalization; links A and B reach Gen4.",
+      "passed": true
+    },
+    {
+      "id": "S03",
+      "title": "Receiver not detected (empty slot)",
+      "file": "S03.json",
+      "topology": "basic",
+      "description": "Nothing is plugged into the slot behind switch downstream port 3. Receiver detection never sees termination on any lane, so DSP3 cycles between Detect.Quiet and Detect.Active every 12 ms and never reaches Polling.",
+      "expected": "Link D cycles Detect.Quiet <-> Detect.Active and never reaches Polling; links A, B and C train normally.",
+      "passed": true
+    },
+    {
+      "id": "S04",
+      "title": "Gen3 equalization failure falls back to Gen2",
+      "file": "S04.json",
+      "topology": "basic",
+      "description": "On link B, equalization at 8.0 GT/s cannot pass Phase 2: the endpoint (EP1, the requester in Phase 2) asks switch port DSP1 to try transmitter presets, but none reaches the figure-of-merit target. The model retries once, gives up on 8.0 GT/s and above, and falls back to the highest rate that still works: 5.0 GT/s.",
+      "expected": "Link B falls back to Gen2 x16 after two failed 8.0 GT/s equalization attempts (Phase 2); the reason is logged. Links A and C reach Gen4.",
+      "passed": true
+    },
+    {
+      "id": "S05",
+      "title": "Gen4 equalization failure settles at Gen3",
+      "file": "S05.json",
+      "topology": "basic",
+      "description": "On link B, equalization at 8.0 GT/s passes, but equalization at 16.0 GT/s cannot pass Phase 3: switch port DSP1 (the requester in Phase 3) cannot find an endpoint transmitter preset that reaches the target. After two failed attempts the link stays at 8.0 GT/s.",
+      "expected": "Link B settles at Gen3 x16: 8 GT/s equalization complete, 16 GT/s equalization failed twice in Phase 3. Links A and C reach Gen4.",
+      "passed": true
+    },
+    {
+      "id": "S06",
+      "title": "Lane failure (lanes 8-15 open on link A)",
+      "file": "S06.json",
+      "topology": "basic",
+      "description": "Lanes 8 to 15 of link A (root port to switch) are open: no receiver termination and no signal. Receiver detection only finds lanes 0-7, so the link trains on those lanes and comes up x8 at full speed.",
+      "expected": "Link A trains at Gen4 x8 instead of x16; links B and C are unaffected.",
+      "passed": true
+    },
+    {
+      "id": "S07",
+      "title": "Link flapping (periodic errors in L0)",
+      "file": "S07.json",
+      "topology": "basic",
+      "description": "After link B reaches 16 GT/s, a receiver error is injected every 3 ms (six in total), alternating between the endpoint's and the switch port's receiver. Each error sends the link from L0 into Recovery, which re-locks and returns to L0 at the same speed. The link never goes down, but it keeps stopping traffic for a short time.",
+      "expected": "Link B goes L0 -> Recovery -> L0 six times (flap_count = 6), stays at Gen4 x16 and never goes down.",
+      "passed": true
+    },
+    {
+      "id": "S08",
+      "title": "Stuck in Polling (partner never sends TS2)",
+      "file": "S08.json",
+      "topology": "point_to_point",
+      "description": "Point-to-point link. The endpoint's transmitter never sends TS2: every time its LTSSM wants to send TS2 it sends TS1 instead (a PHY or firmware defect). The root port hears TS1s, moves to Polling.Configuration, and waits for 8 consecutive TS2 that never come. After the 48 ms Polling.Configuration timeout it goes back to Detect and tries again.",
+      "expected": "The root port times out of Polling.Configuration into Detect and never reaches Configuration or L0; enumeration finds only the root port.",
+      "passed": true
+    },
+    {
+      "id": "S09",
+      "title": "Upstream link down (link A never trains)",
+      "file": "S09.json",
+      "topology": "basic",
+      "description": "Every lane of link A (root port to switch) is open. Neither end detects a receiver, so link A cycles in Detect forever. Because the switch holds its downstream ports until link A reaches L0 (dsp_start = wait_for_upstream), links B, C and D never start, and the endpoints only see receivers that are held in reset.",
+      "expected": "Link A stays in Detect; the switch downstream ports never leave Detect.Quiet; enumeration finds only the root port.",
+      "passed": true
+    },
+    {
+      "id": "S10",
+      "title": "Hot Reset from the host",
+      "file": "S10.json",
+      "topology": "basic",
+      "description": "At 35 ms, with every link at Gen4, software sets the Secondary Bus Reset bit on the root port. The root port signals Hot Reset with TS1s, the switch upstream port follows, and the switch propagates the reset to its downstream ports. Every link goes down, retrains from Detect at 2.5 GT/s, equalizes again and ends exactly as in S01.",
+      "expected": "All switch links retrain after the Hot Reset; the final state matches S01 (A and B at Gen4 x16, C at Gen4 x4, 7 functions).",
+      "passed": true
+    },
+    {
+      "id": "S11",
+      "title": "ASPM L1 entry and exit",
+      "file": "S11.json",
+      "topology": "point_to_point",
+      "description": "Point-to-point link with ASPM L1 enabled. Once the link is at Gen4 and idle for 2 ms, the endpoint asks to enter L1 (the PM handshake is symbolic in the model) and both sides send EIOS. After 3 ms in L1 the host has traffic again, so the root port wakes the link. Leaving L1 always goes through Recovery. This happens twice.",
+      "expected": "The link goes L0 -> L1 -> Recovery -> L0 twice, with no errors and no speed change; final state L0 Gen4 x16.",
+      "passed": true
+    },
+    {
+      "id": "S12",
+      "title": "Lane reversal",
+      "file": "S12.json",
+      "topology": "point_to_point",
+      "description": "Point-to-point link wired with lanes in reverse order: root port lane 0 connects to endpoint lane 15, lane 1 to lane 14, and so on. During Configuration the endpoint receives lane number 15 on its physical lane 0, recognizes the reversal, and maps its lanes in reverse. The link trains at full width and speed.",
+      "expected": "Link A trains at Gen4 x16 with lane reversal applied by the endpoint.",
+      "passed": true
+    },
+    {
+      "id": "S13",
+      "title": "Speed policy comparison (Gen2 step)",
+      "file": "S13.json",
+      "topology": "basic",
+      "description": "Same hardware as S01, but the speed-change policy is set to gen2_step: true. Instead of Gen1 -> Gen3 -> Gen4, each downstream port steps through every rate: Gen1 -> Gen2 -> Gen3 -> Gen4. The final result is identical; the path and the time to reach the final speed are not.",
+      "expected": "Every populated link visits L0 at Gen1, Gen2, Gen3 and Gen4 (three speed changes instead of two) and ends as in S01.",
+      "passed": true
+    },
+    {
+      "id": "S14",
+      "title": "Recovery fails and the link goes down",
+      "file": "S14.json",
+      "topology": "basic",
+      "description": "Link B is up at 16 GT/s when, at 32 ms, every lane opens (as if the card were pulled or lost power). The receivers see the signal disappear and enter Recovery, but Recovery.RcvrLock can never re-acquire lock. After the RcvrLock timeout both ends give up, the Data Link Layer goes down and the ports return to Detect, where no receiver answers any more.",
+      "expected": "Link B goes L0 -> Recovery.RcvrLock -> Detect and stays down; DL_Link_Active clears and enumeration no longer finds EP1.",
+      "passed": true
+    },
+    {
+      "id": "S15",
+      "title": "Marginal lane causes recovery storms at Gen4",
+      "file": "S15.json",
+      "topology": "basic",
+      "description": "Lane 5 of link B corrupts ordered sets and data now and then, but only at 16 GT/s (seeded random errors, 0.1 percent per ordered set). Training succeeds, equalization passes, and the link reaches Gen4. From then on receiver errors on lane 5 keep sending the link through Recovery.",
+      "expected": "Link B stays at Gen4 x16 but goes through Recovery many times (flap_count >= 10), every error reported on lane 5; the link never goes down.",
+      "passed": true
+    },
+    {
+      "id": "S16",
+      "title": "Target Link Speed capped at Gen3 by software",
+      "file": "S16.json",
+      "topology": "basic",
+      "description": "Both ends of link B support 16 GT/s, but software (for example a BIOS \"PCIe speed\" option) has set Target Link Speed in DSP1's Link Control 2 register to 8 GT/s. The downstream port never advertises more than 8 GT/s, so the link stops at Gen3 with no errors and no failed equalization.",
+      "expected": "Link B trains to Gen3 x16 with 8 GT/s equalization complete and never attempts 16 GT/s; links A and C reach Gen4.",
+      "passed": true
+    }
+  ]
+}

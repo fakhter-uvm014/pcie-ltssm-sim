@@ -1,0 +1,52 @@
+id: S13
+title: Speed policy comparison (Gen2 step)
+description: >
+  Same hardware as S01, but the speed-change policy is set to gen2_step:
+  true. Instead of Gen1 -> Gen3 -> Gen4, each downstream port steps through
+  every rate: Gen1 -> Gen2 -> Gen3 -> Gen4. The final result is identical;
+  the path and the time to reach the final speed are not.
+topology: basic
+seed: 1
+duration_ms: 50
+config:
+  gen2_step: true
+expected:
+  summary: >
+    Every populated link visits L0 at Gen1, Gen2, Gen3 and Gen4 (three speed
+    changes instead of two) and ends as in S01.
+  checks:
+    - {check: link, link: A, state: L0, speed: Gen4, width: x16}
+    - {check: link, link: B, state: L0, speed: Gen4, width: x16}
+    - {check: link, link: C, state: L0, speed: Gen4, width: x4}
+    - {check: sequence, port: RP, states: ["L0@Gen1", "L0@Gen2", "L0@Gen3", "L0@Gen4"]}
+    - {check: sequence, port: EP2, states: ["L0@Gen1", "L0@Gen2", "L0@Gen3", "L0@Gen4"]}
+    - {check: counter, link: A, counter: speed_changes, op: "==", value: 3}
+    - {check: counter, link: A, counter: eq_attempts.Gen3, op: "==", value: 1}
+    - {check: counter, link: A, counter: time_to_final_speed_ns, op: ">", value: 13726466}
+    - {check: devices, count: 7}
+symptom: >
+  Same final state as the healthy baseline, but the bring-up takes a little
+  longer.
+what_to_look_for: >
+  Four green L0 segments per link instead of three. The extra step
+  (Gen1 -> Gen2) has no teal equalization bar because 5.0 GT/s does not
+  equalize. Compare time_to_final_speed_ns for link A with S01 (13.726 ms in
+  S01): the extra Recovery pass costs a little time. Equalization still
+  runs exactly once per rate at 8 and 16 GT/s.
+what_this_means: >
+  How a link climbs to its final rate is a policy choice (hardware
+  autonomous behavior, firmware, or software through Target Link Speed and
+  Retrain Link). In the model the downstream port always initiates speed
+  changes; on real links either port may. The ending state is what LnkSta shows; the
+  path is only visible in a trace. When comparing two platforms, a
+  different path does not mean a problem.
+likely_root_causes:
+  - "Different root port or switch firmware policies for speed changes (normal)."
+  - "Software stepping the Target Link Speed during bring-up."
+how_to_debug:
+  - "If bring-up time matters, measure time from PERST# deassertion to DL_Link_Active and to the final speed on both platforms."
+  - "Use this model to compare policies: run S01 and S13 and compare the counters."
+mystery_hints:
+  - "Count the L0 segments on one swimlane."
+mystery_cause: "The speed-change policy steps through every rate (Gen1 -> Gen2 -> Gen3 -> Gen4)."
+quiz: false

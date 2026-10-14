@@ -1,0 +1,56 @@
+id: S14
+title: Recovery fails and the link goes down
+description: >
+  Link B is up at 16 GT/s when, at 32 ms, every lane opens (as if the card
+  were pulled or lost power). The receivers see the signal disappear and
+  enter Recovery, but Recovery.RcvrLock can never re-acquire lock. After
+  the RcvrLock timeout both ends give up, the Data Link Layer goes down and
+  the ports return to Detect, where no receiver answers any more.
+topology: basic
+seed: 1
+duration_ms: 70
+faults:
+  - {type: connection_lost, link: B, at_ms: 32}
+expected:
+  summary: >
+    Link B goes L0 -> Recovery.RcvrLock -> Detect and stays down;
+    DL_Link_Active clears and enumeration no longer finds EP1.
+  checks:
+    - {check: link, link: B, state: Detect, up: false}
+    - {check: sequence, port: DSP1, states: ["L0@Gen4", Recovery.RcvrLock, Detect.Quiet, Detect.Active, Detect.Quiet]}
+    - {check: reason, port: DSP1, contains: "Recovery.RcvrLock timeout"}
+    - {check: counter, link: B, counter: link_down_count, op: "==", value: 1}
+    - {check: port, port: DSP1, dl_link_active: false}
+    - {check: counter, link: B, counter: detect_cycles, op: ">=", value: 4}
+    - {check: link, link: C, state: L0, speed: Gen4, width: x4}
+    - {check: devices, count: 6, absent: [EP1]}
+symptom: >
+  The accelerator worked, then vanished. The switch port it was attached to
+  is still present.
+what_to_look_for: >
+  At 32 ms both ends of link B leave L0 with "receiver lost signal" and
+  enter Recovery.RcvrLock. They send TS1 for the full RcvrLock timeout
+  (2 ms in the model) without receiving anything, then enter Detect.Quiet
+  with "link down". DL_Link_Active clears (status event) and the detect
+  cycles that follow find no receiver. Compare with S07, where Recovery
+  succeeded every time.
+what_this_means: >
+  Recovery is the last chance to keep a link up. If it cannot re-acquire
+  lock, the LTSSM drops to Detect and the Data Link Layer reports the link
+  down; software sees the device disappear. Whether the system survives
+  depends on hot-plug and error-containment support (surprise removal,
+  DPC), not on the LTSSM.
+likely_root_causes:
+  - "Card removed or lost power (surprise removal)."
+  - "Cable or connector disconnected, or a retimer that reset."
+  - "The device itself reset or hung (firmware crash, watchdog, thermal shutdown)."
+  - "Signal integrity bad enough that Recovery cannot re-lock (a worse version of S07/S15)."
+how_to_debug:
+  - "dmesg: look for 'Link Down', pciehp slot messages, AER 'Surprise Down Error' or DPC triggers around the time the device vanished."
+  - "lspci -vvv on the downstream port: LnkSta DLActive-; SltSta presence/link state if it is a hot-plug slot."
+  - "Check device power rails and resets at the moment of failure; check device firmware logs or crash dumps."
+  - "If the device comes back after a slot power cycle or rescan (echo 1 > /sys/bus/pci/rescan), suspect the device; if not, suspect power or the physical connection."
+mystery_hints:
+  - "Did Recovery ever succeed after the problem started?"
+  - "What happened to DL_Link_Active?"
+mystery_cause: "The device behind one link disappeared (connection lost); Recovery could not re-lock and the link went down."

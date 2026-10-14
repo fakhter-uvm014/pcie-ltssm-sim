@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pcie-ltssm-sim"
+version = "1.0.0"
+description = "Behavioral PCIe LTSSM simulator (Gen1 to Gen4) for learning: link training, speed change, equalization, fault scenarios and a timeline viewer."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Farzana Akhter" }]
+requires-python = ">=3.10"
+dependencies = ["pyyaml>=5.4"]
+keywords = ["pcie", "ltssm", "link training", "equalization", "simulation", "validation", "education"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Education",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "pytest-html>=3"]
+
+[project.scripts]
+ltssm = "ltssm.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/fakhter-uvm014/pcie-ltssm-sim"
+"Live viewer" = "https://fakhter-uvm014.github.io/pcie-ltssm-sim/"
+Guide = "https://github.com/fakhter-uvm014/pcie-ltssm-sim/tree/main/docs/guide"
+
+# The simulator reads scenarios/ and topologies/ from the repository, so the
+# intended use is a clone plus "pip install -e .". See README "Quick start".
+[tool.setuptools]
+packages = ["ltssm"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = ["error"]

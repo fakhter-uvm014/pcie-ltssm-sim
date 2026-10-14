@@ -1,0 +1,53 @@
+id: S03
+title: Receiver not detected (empty slot)
+description: >
+  Nothing is plugged into the slot behind switch downstream port 3. Receiver
+  detection never sees termination on any lane, so DSP3 cycles between
+  Detect.Quiet and Detect.Active every 12 ms and never reaches Polling.
+topology: basic
+seed: 1
+duration_ms: 50
+faults:
+  - {type: empty_slot, link: D}
+expected:
+  summary: >
+    Link D cycles Detect.Quiet <-> Detect.Active and never reaches Polling;
+    links A, B and C train normally.
+  checks:
+    - {check: link, link: D, state: Detect}
+    - {check: only, port: DSP3, states: [Detect]}
+    - {check: never, port: DSP3, state: Polling}
+    - {check: counter, link: D, counter: detect_cycles, op: ">=", value: 2}
+    - {check: reason, port: DSP3, contains: "no receiver termination"}
+    - {check: link, link: B, state: L0, speed: Gen4, width: x16}
+    - {check: devices, count: 7}
+symptom: >
+  One downstream port never shows a link; the rest of the system is fine.
+what_to_look_for: >
+  DSP3's swimlane is grey only: short Detect.Active pulses every 12 ms
+  separated by long Detect.Quiet periods. The detect_cycles counter for
+  link D grows by one per cycle. There is no Polling bar at all: the port
+  never transmitted a single TS1, because nothing answered receiver
+  detection.
+what_this_means: >
+  Receiver detection is an electrical test: the transmitter checks whether a
+  terminated receiver is present on each lane. No termination means nothing
+  is there (or nothing is powered), so the LTSSM does not even try to train.
+  An empty slot looks exactly like this, and so does a card that is not
+  seated or not powered.
+likely_root_causes:
+  - "Slot is empty (expected)."
+  - "Card not fully seated, or a riser/cable not connected."
+  - "Card not powered (missing auxiliary power, power sequencing problem)."
+  - "The card is held in reset (PERST# stuck asserted), so its receivers stay high-impedance."
+  - "AC coupling capacitors missing or open on the board (every lane open)."
+how_to_debug:
+  - "lspci -vvv on the downstream port: LnkSta shows Width x0 and DLActive-; the device is absent from lspci."
+  - "Reseat the card; try a known-good card in the same slot and this card in a known-good slot."
+  - "Check slot power and PERST#/REFCLK with a scope or a power-sequencing log."
+  - "If the platform exposes it, read the port's LTSSM state from vendor debug registers: stuck in Detect confirms a detection problem rather than a training problem."
+  - "If presence-detect (PRSNT#) says a card is there but receiver detection fails, suspect power, reset or the lanes themselves."
+mystery_hints:
+  - "Did the port ever leave Detect?"
+  - "Detect is an electrical test. What would make it fail on every lane?"
+mystery_cause: "Nothing is plugged into the slot (no receiver termination on any lane)."

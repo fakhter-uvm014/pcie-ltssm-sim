@@ -1,0 +1,58 @@
+id: S08
+title: Stuck in Polling (partner never sends TS2)
+description: >
+  Point-to-point link. The endpoint's transmitter never sends TS2: every
+  time its LTSSM wants to send TS2 it sends TS1 instead (a PHY or firmware
+  defect). The root port hears TS1s, moves to Polling.Configuration, and
+  waits for 8 consecutive TS2 that never come. After the 48 ms
+  Polling.Configuration timeout it goes back to Detect and tries again.
+topology: point_to_point
+seed: 1
+duration_ms: 80
+faults:
+  - {type: partner_never_sends_ts2, port: EP}
+expected:
+  summary: >
+    The root port times out of Polling.Configuration into Detect and never
+    reaches Configuration or L0; enumeration finds only the root port.
+  checks:
+    - {check: link, link: A, state: [Detect, Polling, Configuration]}
+    - {check: sequence, port: RP, states: [Polling.Active, Polling.Configuration, Detect.Quiet]}
+    - {check: reason, port: RP, contains: "Polling.Configuration timeout"}
+    - {check: never, port: RP, states: [Configuration, L0]}
+    - {check: never, port: EP, state: L0}
+    - {check: devices, count: 1, absent: [EP]}
+symptom: >
+  The endpoint never shows up. The root port's link is not idle either:
+  something is clearly transmitting.
+what_to_look_for: >
+  RP's swimlane: a short Polling.Active bar, then a long amber
+  Polling.Configuration bar that lasts 48 ms, then back to Detect. The
+  timeout reason prints the last ordered set received: a TS1, not a TS2.
+  EP's swimlane is different: it believes it sent TS2 and received TS2, so
+  it reaches Configuration.Linkwidth.Start and times out there after 24 ms.
+  The two ends disagree about where they are, which is typical when one
+  side's transmitter misbehaves.
+what_this_means: >
+  Polling.Active proves both sides can receive TS1. Polling.Configuration
+  proves both sides moved on and confirmed with TS2. A port that reaches
+  Polling.Configuration but never leaves it is hearing the partner but not
+  the confirmation. On real hardware this points at the partner's state
+  machine or transmitter, or at lanes that only work in one direction.
+  A related outcome is Polling.Compliance: if a port detects a receiver but
+  never receives anything at all, it may enter Polling.Compliance and send
+  its test pattern instead (the model has that rule too).
+likely_root_causes:
+  - "Partner firmware or PHY defect, or a partner stuck in a test mode."
+  - "Lanes that work in one direction only (broken trace or capacitor in one direction)."
+  - "Polarity or lane-ordering problems that let TS1 through but corrupt later stages (rare)."
+  - "A retimer that is not forwarding correctly in one direction."
+how_to_debug:
+  - "Read the LTSSM state on BOTH ends if the vendor exposes it; stuck in Polling.Configuration on one side is the key observation."
+  - "Use a protocol analyzer or scope to see which ordered sets each side sends."
+  - "Check the partner's firmware version and any errata about link training."
+  - "Try a different partner device in the same slot to separate host-side and device-side problems."
+mystery_hints:
+  - "Which LTSSM substate takes the longest on the root port?"
+  - "What did the root port receive last before the timeout?"
+mystery_cause: "The partner never sends TS2 (its transmitter or firmware is broken), so Polling.Configuration times out."
